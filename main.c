@@ -27,7 +27,21 @@ int main(){
 
     printf("Connected!\n");
 
-    Ied
+    LinkedList deviceList = IedConnection_getLogicalDeviceList(connection, &err);   // fetch logical devices from physical device
+
+    if (err != IED_ERROR_OK) {
+        IedConnection_destroy(connection);      // destroy (disconnect)
+        printf("Failed to read device list (error code: %i)\n", err);
+    }
+
+    LinkedList device = LinkedList_getNext(deviceList);
+    LinkedList varList = IedConnection_getLogicalDeviceVariables(connection, &err, device->data);
+    LinkedList variable = LinkedList_getNext(varList);
+    while(variable != NULL){
+        printf("VAR: %s\n", (char*) variable->data);
+        variable = variable->next;
+    }
 
     IedConnection_destroy(connection);      // destroy (disconnect)
+    printf("Disconnected!\n");
 }
