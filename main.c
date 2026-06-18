@@ -2,11 +2,14 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 // IEC61850 client library to handle connections to server
 #include <libiec61850/iec61850_client.h>
 
 int main(){
+    size_t arrSize = 3;
+    char *pathSuffix[3] = {"/LLN0.NamPlt.vendor", "/LLN0.NamPlt.swRev", "/LLN0.NamPlt.d"};
     char *hostname = "localhost";   // IP address of device you want to connect to
     int tcpPort = 102;              // TCP port of device (IEC 16850 has port 102 as standard)
 
@@ -25,23 +28,43 @@ int main(){
         return -1;
     }
 
-    printf("Connected!\n");
+    printf("Connected!\n\n");
 
-    LinkedList deviceList = IedConnection_getLogicalDeviceList(connection, &err);   // fetch logical devices from physical device
+    char *deviceName = LinkedList_getNext(IedConnection_getLogicalDeviceList(connection, &err))->data;
+    char daRef[50];
+    for (size_t i = 0; i < arrSize; i++)
+    {
+        strcpy(daRef, deviceName);
+        strcat(daRef, pathSuffix[i]);
+        printf("reading from path: '%s'\n", daRef);
 
-    if (err != IED_ERROR_OK) {
-        IedConnection_destroy(connection);      // destroy (disconnect)
-        printf("Failed to read device list (error code: %i)\n", err);
-    }
-
-    LinkedList device = LinkedList_getNext(deviceList);
-    LinkedList varList = IedConnection_getLogicalDeviceVariables(connection, &err, device->data);
-    LinkedList variable = LinkedList_getNext(varList);
-    while(variable != NULL){
-        printf("VAR: %s\n", (char*) variable->data);
-        variable = variable->next;
+        MmsValue* value = IedConnection_readObject(connection, &err, daRef, IEC61850_FC_DC);
+        if(value != NULL){
+            switch (MmsValue_getType(value))
+            {
+            case MMS_VISIBLE_STRING:
+            case MMS_STRING:
+                const char *strVal = MmsValue_toString(value);
+                printf("read string value: %s\n", strVal);
+                break;
+            case MMS_INTEGER:
+            case MMS_UNSIGNED:
+                int intVal = MmsValue_toInt32(value);
+                printf("read number value: %d\n", intVal);
+                break;
+            case MMS_BOOLEAN:
+                bool boolVal = MmsValue_getBoolean(value);
+                printf("read boolean value: %d\n", boolVal);
+            default:
+                printf("Couldn't read from object '%s'\n", daRef);
+                break;
+            }
+        }
+        printf("\n");
+        MmsValue_delete(value);    // always free dynamically allocated memory when MmsValue has been created
     }
 
     IedConnection_destroy(connection);      // destroy (disconnect)
     printf("Disconnected!\n");
 }
+
