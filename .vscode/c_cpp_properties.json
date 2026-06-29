@@ -1,7 +1,25 @@
 {
     "configurations": [
         {
-            "name": "Linux",
+            "name": "Ubuntu",
+            "includePath": [
+                "/home/sebli/iec61850-scraper/**",
+                "/usr/local/include/",
+                "/usr/local/include/libiec61850",
+                "/usr/local/include/xlsxwriter"
+            ],
+            "defines": [],
+            "cStandard": "c99",
+            "cppStandard": "gnu++17",
+            "mergeConfigurations": false,
+            "recursiveIncludes": {},
+            "compilerPath": "/usr/bin/gcc",
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true
+            }
+        },
+        {
+            "name": "MinGW - Win64",
             "includePath": [
                 "${workspaceFolder}/**",
                 "/usr/local/include/",
@@ -11,7 +29,13 @@
             "defines": [],
             "cStandard": "c99",
             "cppStandard": "gnu++17",
-            "intelliSenseMode": "${default}"
+            "mergeConfigurations": false,
+            "recursiveIncludes": {},
+            "compilerPath": "/usr/bin/x86_64-w64-mingw32-gcc",
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true
+            },
+            "compilerPathInCppPropertiesJson": "/usr/bin/x86_64-w64-mingw32-gcc"
         }
     ],
     "version": 4
