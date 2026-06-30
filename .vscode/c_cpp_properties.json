@@ -22,7 +22,8 @@
             "name": "MinGW - Win64",
             "includePath": [
                 "/home/sebli/iec61850-scraper/**",
-                "/home/sebli/libiec61850/.install/include/"
+                "/home/sebli/libiec61850/.install/include/",
+                "/home/sebli/libxlsxwriter/include/"
             ],
             "defines": [],
             "cStandard": "c99",
