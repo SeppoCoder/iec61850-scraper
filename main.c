@@ -1,5 +1,5 @@
 // gcc main.c -o main -liec61850 -lxlsxwriter
-// x86_64-w64-mingw32-gcc main.c -o main -liec61850 -lxlsxwriter
+// x86_64-w64-mingw32-gcc main.c -o main.exe -liec61850 -lxlsxwriter
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -7,7 +7,7 @@
 #include <stdbool.h>
 
 // IEC61850 client library to handle connections to server
-#include <libiec61850/iec61850_client.h>
+#include "iec61850_client.h"
 
 // xlsx library for handling writing to excel spreadsheet
 #include <xlsxwriter.h>
