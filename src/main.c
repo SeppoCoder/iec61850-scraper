@@ -26,7 +26,7 @@
 typedef struct {
     PWCHAR  hostname;
     char ip[16];
-    UINT8 subnet_mask;
+    uint8_t subnet_mask;
     int success; 
 } NetworkInfo;
 
@@ -112,27 +112,30 @@ NetworkInfo getInfoFromNetwork(wchar_t *friendlyName){
     return info;
 }
 
-IPRange getIPRange(NetworkInfo netInfo){
+IPRange getIPRange(NetworkInfo *netInfo){
     IPRange range = {0};
     range.success = 0;
 
-    if(netInfo.subnet_mask > 32){ return range; }
-     
-    size_t usableIPAddresses = (size_t) (pow(2, 32 - netInfo.subnet_mask) - 2); // calculate how many IP addresses that can be used
+    if(netInfo->subnet_mask > 32){ return range; }   // subnet mask in CIDR notation
+    
+    int usableIPAddresses = (int) pow(2, 32 - netInfo->subnet_mask) - 2; // calculate how many IP addresses that can be used
+    //printf("Network with mask '%d' has %d usable hosts\n", netInfo->subnet_mask, usableIPAddresses);
 
-    char *lastDot = strrchr(netInfo.ip, '.'); // find the last dot in the ip-address
+    char *lastDot = strrchr(netInfo->ip, '.'); // find the last dot in the ip-address
     char *lastHostIP = (lastDot == NULL) ? NULL : lastDot + 1;  // find the last characters in ip-address
     if(lastHostIP == NULL){ return range; }
     int lastHostToi = atoi(lastHostIP);
 
     unsigned subnetIndex = floor(lastHostToi / (usableIPAddresses + 2)); // calculate in which subnet our host is in
-    printf("subnet index for (%s) is '%d'\n", netInfo.ip, subnetIndex);
     int hostMin = 1 + subnetIndex * (usableIPAddresses + 2);        // calculate min host
-    int hostMax = 1 + subnetIndex * (usableIPAddresses + 2) + usableIPAddresses;    // calculate max host
+    int hostMax = hostMin + usableIPAddresses - 1;    // calculate max host
+    if(hostMin > hostMax) { return range; }
 
-    char IPSuffix[12];
-    unsigned lengthOfIPSuffix = strlen(netInfo.ip) - strlen(lastHostIP);    // calculate how many characters in IP address before last characters (i.e. 192.168.0.XX)
-    strncpy(IPSuffix, netInfo.ip, lengthOfIPSuffix);    // copy suffix (192.168.0.)
+    char IPSuffix[13];
+    unsigned lengthOfIPSuffix = strlen(netInfo->ip) - strlen(lastHostIP);    // calculate how many characters in IP address before last characters (e.g. 192.168.122.XX)
+    //printf("IP address is '%s', length of suffix is: %d\n", netInfo->ip, lengthOfIPSuffix);
+    strncpy(IPSuffix, netInfo->ip, lengthOfIPSuffix);    // copy suffix (192.168.122.)
+    IPSuffix[sizeof(IPSuffix) - 1] = '\0';
 
     int assignMinChars = snprintf(range.hostMin, sizeof(range.hostMin), "%s%d", IPSuffix, hostMin);  // concatenate suffix and min host
     if (assignMinChars < 0){ return range; }
@@ -143,6 +146,8 @@ IPRange getIPRange(NetworkInfo netInfo){
     return range;
 }
 
+
+//PING to see if it answers
 
 int main(){
     int tcpPort = 102;  // TCP port of device (IEC 16850 has port 102 as standard)
@@ -161,14 +166,22 @@ int main(){
         netInfo = getInfoFromNetwork(SSIDs[i]);
         if(netInfo.success){
           printf("found a network with IP: %s, and netmask: %d\n", netInfo.ip, netInfo.subnet_mask);
+          printf("\n");
           break;  
         } 
     }
-
+    
     if(!netInfo.success){
         printf("coudln't find any suitable network!");
         return -1;
     }
+
+    IPRange ipRange = getIPRange(&netInfo);
+    if(ipRange.success == 0){
+        printf("Couldn't calculate IP range!");
+        return -1;
+    }
+    printf("IP in range %s - %s\n", ipRange.hostMin, ipRange.hostMax);
 
     // possible paths for accessing data attributes
     const char *topLevelPaths[] = {"LPHD0", "LPHD1", "LLN0"};
@@ -182,13 +195,6 @@ int main(){
 
     IedConnection connection = IedConnection_create();  // create a connection
     IedClientError err;     // error reason
-
-    IPRange ipRange = getIPRange(netInfo);
-    if(ipRange.success == 0){
-        printf("Couldn't calculate IP range!");
-        return -1;
-    }
-    printf("IP in range %s - %s\n", ipRange.hostMin, ipRange.hostMax);
 
     IedConnection_connect(connection, &err, netInfo.ip, tcpPort);     // connect to physical device using the connection above
     printf("Connecting to %s:%i\n", netInfo.ip, tcpPort);
