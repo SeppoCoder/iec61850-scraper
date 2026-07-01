@@ -31,8 +31,11 @@ typedef struct {
 } NetworkInfo;
 
 typedef struct {
+    char IPPrefix[16];
     char hostMin[16];
+    int minSuffix;
     char hostMax[16];
+    int maxSuffix;
     int success;
 } IPRange;
 
@@ -125,18 +128,18 @@ IPRange getIPRange(NetworkInfo *netInfo){
     if(lastHostToi == 0){ return range; }   // conversion not valid
 
     unsigned subnetIndex = floor(lastHostToi / (usableIPAddresses + 2)); // calculate in which subnet our host is in
-    int hostMin = 1 + subnetIndex * (usableIPAddresses + 2);        // calculate min host
-    int hostMax = hostMin + usableIPAddresses - 1;    // calculate max host
-    if(hostMin > hostMax) { return range; }
+    range.minSuffix = 1 + subnetIndex * (usableIPAddresses + 2);        // calculate min host
+    range.maxSuffix = range.minSuffix + usableIPAddresses - 1;    // calculate max host
+    if(range.minSuffix > range.maxSuffix) { return range; }
 
-    char IPSuffix[13];
-    unsigned lengthOfIPSuffix = strlen(netInfo->ip) - strlen(lastHostIP);    // calculate how many characters in IP address before last characters (e.g. 192.168.122.XX)
-    strncpy(IPSuffix, netInfo->ip, lengthOfIPSuffix);    // copy suffix (192.168.122.)
-    IPSuffix[sizeof(IPSuffix) - 1] = '\0';
+    char IPPrefix[13]; // maximum IPv4 length of 12 chars (+ null terminating character)
+    unsigned lengthOfIPPrefix = strlen(netInfo->ip) - strlen(lastHostIP);    // calculate how many characters in IP address before last characters (e.g. 192.168.122.XX)
+    strncpy(range.IPPrefix, netInfo->ip, lengthOfIPPrefix);    // copy prefix (192.168.122.)
+    range.IPPrefix[sizeof(range.IPPrefix) - 1] = '\0';
 
-    int assignMinChars = snprintf(range.hostMin, sizeof(range.hostMin), "%s%d", IPSuffix, hostMin);  // concatenate suffix and min host
+    int assignMinChars = snprintf(range.hostMin, sizeof(range.hostMin), "%s%d", range.IPPrefix, range.minSuffix);  // concatenate suffix and min host
     if (assignMinChars < 0){ return range; }    // snprintf couldn't complete 
-    int assignMaxChars = snprintf(range.hostMax, sizeof(range.hostMax), "%s%d", IPSuffix, hostMax);  // concatenate suffix and max host
+    int assignMaxChars = snprintf(range.hostMax, sizeof(range.hostMax), "%s%d", range.IPPrefix, range.maxSuffix);  // concatenate suffix and max host
     if (assignMaxChars < 0){ return range; }    // snprintf couldn't complete 
 
     range.success = 1;
@@ -175,23 +178,75 @@ void processDeviceData(IedConnection con, IedClientError *err, const char *devic
                 snprintf(daRef, sizeof(daRef), "%s/%s.%s.%s", deviceName, topLevelPaths[top], midLevelPaths[mid], dataAttributePaths[daIndex]);     //concatenate the different paths to a full path
                 MmsValue *value = IedConnection_readObject(con, err, daRef, IEC61850_FC_DC);    // read object at path
 
-                if(value == NULL){
-                    printf("Error reading from object!\n REASON: %s\n", IedClientError_toString(*err));
-                }else{
-                    const char *strVal = MmsValue_toString(value);
-                    lxw_error xlsxError = worksheet_write_string(worksheet, 1, daIndex+1, strVal, NULL);  // write value to spreadsheet
-                    printf("read string value '%s' at path '%s'\n", strVal, daRef);
+                if(value != NULL){
+                    lxw_error xlsxError;
+                    switch (MmsValue_getType(value)){    // Parse result based on data type
+
+                        case MMS_VISIBLE_STRING:
+                        case MMS_STRING: {
+                            const char *strVal = MmsValue_toString(value);
+                            xlsxError = worksheet_write_string(worksheet, 1, daIndex+1, strVal, NULL);  // write value to spreadsheet
+                            printf("read string value '%s' at path '%s'\n", strVal, daRef);
+                            break;
+                        }
+
+                        case MMS_INTEGER:
+                        case MMS_UNSIGNED: {
+                            int intVal = MmsValue_toInt32(value);
+                            xlsxError = worksheet_write_number(worksheet, 1, daIndex+1, intVal, NULL);  // write value to spreadsheet
+                            printf("read number value: %d\n", intVal);
+                            break;
+                        }
+
+                        case MMS_BOOLEAN: {
+                            bool boolVal = MmsValue_getBoolean(value);
+                            xlsxError = worksheet_write_boolean(worksheet, 1, daIndex+1, boolVal, NULL);  // write value to spreadsheet
+                            printf("read boolean value: %d\n", boolVal);
+                            break;
+                        }
+
+                        default:
+                            break;
+                    }
                     if(xlsxError != LXW_NO_ERROR){
                         printf("failed to write value to workbook. \n REASON: %s\n", strerror(xlsxError));
                     }
                 }
-
+                else{
+                    printf("Error reading from object!\n REASON: %s\n", IedClientError_toString(*err));
+                }
                 MmsValue_delete(value);
 
             }
         }
         worksheet_write_string(worksheet, 0, daIndex+1, dataAttributePaths[daIndex], NULL);  // write the data attribute name to spreadsheet
     }
+}
+
+void connectAndFetchIED(IedConnection connection, IedClientError *err, const char *deviceIP, int tcpPort, lxw_worksheet *worksheet, int row){
+    IedConnection_connect(connection, err, deviceIP, tcpPort);     // connect to physical device using the connection above
+    printf("Connecting to %s:%i\n", deviceIP, tcpPort);
+    worksheet_write_string(worksheet, 0, 0, "Device", NULL);    
+    worksheet_write_string(worksheet, row, 0, deviceIP, NULL);    // write IP-address to excel worksheet
+    worksheet_write_string(worksheet, 0, 15, "Connects?", NULL);  // does this device connect successfully?
+
+    if (*err != IED_ERROR_OK)
+    {
+        printf("couldn't connect to %s:%i\n", deviceIP, tcpPort);  
+        worksheet_write_string(worksheet, row, 15, "no", NULL); 
+        return;
+    }
+
+    printf("Connected!\n\n");
+    worksheet_write_string(worksheet, row, 15, "yes", NULL);
+
+    const char *deviceName = get_LD_name(connection, err);   // fetch name of logical device
+    if(deviceName == NULL){
+        printf("couldn't find device name\n");  
+        return; 
+    }
+
+    processDeviceData(connection, err, deviceName, worksheet);
 }
 
 int main(){
@@ -205,10 +260,10 @@ int main(){
     }
 
     // try to find station network
-    wchar_t *SSIDs[] = {L"Stationsbuss", L"StationsBuss", L"virbr0", L"stationbuss", L"stationsBuss" }; // array of network names to look for 
+    wchar_t *SSIDs[] = {L"Stationsbuss", L"StationsBuss", L"lo", L"stationbuss", L"stationsBuss" }; // array of network names to look for 
     NetworkInfo netInfo = findMatchingNetwork(SSIDs, sizeof(SSIDs) / sizeof(SSIDs[0])); 
     if(!netInfo.success){
-        printf("coudln't find any suitable network!");
+        printf("coudln't find any suitable network!\n");
         exitCode = -1;
         goto exit_wo_cleanup;
     }
@@ -228,33 +283,15 @@ int main(){
     IedClientError err;     // error reason
 
     int tcpPort = 102;  // TCP port of device (IEC 16850 has port 102 as standard)
-    IedConnection_connect(connection, &err, netInfo.ip, tcpPort);     // connect to physical device using the connection above
-    printf("Connecting to %s:%i\n", netInfo.ip, tcpPort);
-
-    if (err != IED_ERROR_OK)
-    {
-        printf("couldn't connect to %s:%i\n", netInfo.ip, tcpPort);   
-        exitCode = -1;
-        goto exit_wo_cleanup;
-    }
-
-    printf("Connected!\n\n");
-
-    worksheet_write_string(worksheet, 0, 0, "Device", NULL);    
-    worksheet_write_string(worksheet, 1, 0, netInfo.ip, NULL);    // write IP-address to excel worksheet
-
-    const char *deviceName = get_LD_name(connection, &err);   // fetch name of logical device
-    if(deviceName == NULL){
-        printf("couldn't find device name\n");   
-        exitCode = -1;
-        goto cleanup;
-    }
-
-    processDeviceData(connection, &err, deviceName, worksheet);
+    char concatenatedIP[16]; 
+    for(size_t min = ipRange.minSuffix; (min <= ipRange.maxSuffix && min <= 254); min++){
+        snprintf(concatenatedIP, sizeof(concatenatedIP), "%s%d", ipRange.IPPrefix, min);    // concatenate prefix and suffix to create whole IP
+        connectAndFetchIED(connection, &err, concatenatedIP, tcpPort, worksheet, min - ipRange.minSuffix + 1);       // connect to IED and fetch its' data
+    } 
     
 cleanup:
+    IedConnection_destroy(connection);
     workbook_close(workbook);   // close and save workbook
-    IedConnection_destroy(connection);      // destroy connection (disconnect)
     printf("\n");
     printf("Wrote results to %s\n", workbookName);
     printf("Disconnected from IED!\n");
