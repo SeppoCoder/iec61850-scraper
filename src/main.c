@@ -5,6 +5,7 @@
 #if defined _WIN32 || defined _WIN64
     #include <winsock2.h>
     #include <iphlpapi.h>
+    #include <icmpapi.h>
     #include <ws2tcpip.h>
     #include <stdio.h>
     #include <stdlib.h>
@@ -226,19 +227,19 @@ void processDeviceData(IedConnection con, IedClientError *err, const char *devic
 void connectAndFetchIED(IedConnection connection, IedClientError *err, const char *deviceIP, int tcpPort, lxw_worksheet *worksheet, int row){
     IedConnection_connect(connection, err, deviceIP, tcpPort);     // connect to physical device using the connection above
     printf("Connecting to %s:%i\n", deviceIP, tcpPort);
-    worksheet_write_string(worksheet, 0, 0, "Device", NULL);    
+    worksheet_write_string(worksheet, 0, 0, "IP", NULL);    
     worksheet_write_string(worksheet, row, 0, deviceIP, NULL);    // write IP-address to excel worksheet
-    worksheet_write_string(worksheet, 0, 15, "Connects?", NULL);  // does this device connect successfully?
+    worksheet_write_string(worksheet, 0, 15, "MMS svar?", NULL);  // does this device connect successfully?
 
     if (*err != IED_ERROR_OK)
     {
         printf("couldn't connect to %s:%i\n", deviceIP, tcpPort);  
-        worksheet_write_string(worksheet, row, 15, "no", NULL); 
+        worksheet_write_string(worksheet, row, 15, "nej", NULL); 
         return;
     }
 
     printf("Connected!\n\n");
-    worksheet_write_string(worksheet, row, 15, "yes", NULL);
+    worksheet_write_string(worksheet, row, 15, "ja", NULL);
 
     const char *deviceName = get_LD_name(connection, err);   // fetch name of logical device
     if(deviceName == NULL){
@@ -247,6 +248,45 @@ void connectAndFetchIED(IedConnection connection, IedClientError *err, const cha
     }
 
     processDeviceData(connection, err, deviceName, worksheet);
+}
+
+void checkForPingAnswer(const char *ipAddress, lxw_worksheet *worksheet, int row){
+    HANDLE hIcmpFile;
+    unsigned long ipaddr = INADDR_NONE;
+    DWORD dwRetVal = 0;
+    char SendData[32] = "Data Buffer";
+    LPVOID ReplyBuffer = NULL;
+    DWORD ReplySize = 0;
+
+    worksheet_write_string(worksheet, 0, 16, "Ping", NULL);
+    worksheet_write_string(worksheet, row, 16, "nej", NULL); // init as fail
+    
+    ipaddr = inet_addr(ipAddress);  // convert ip to be able to send with ICMP
+    if (ipaddr == INADDR_NONE) { return; }
+    
+    hIcmpFile = IcmpCreateFile();   // open handler for ICMP echo request
+    if (hIcmpFile == INVALID_HANDLE_VALUE) { return; } 
+
+    // calculate size and allocate reply buffer
+    ReplySize = sizeof(ICMP_ECHO_REPLY) + sizeof(SendData);
+    ReplyBuffer = (VOID*) malloc(ReplySize);    
+    if (ReplyBuffer == NULL) { 
+        IcmpCloseHandle(hIcmpFile);
+        return;
+    }   
+    
+    dwRetVal = IcmpSendEcho(hIcmpFile, ipaddr, SendData, sizeof(SendData), 
+        NULL, ReplyBuffer, ReplySize, 1000);    // send echo request (ping)
+
+    if (dwRetVal != 0) {
+        PICMP_ECHO_REPLY pEchoReply = (PICMP_ECHO_REPLY)ReplyBuffer;
+        if (pEchoReply->Status == 0) {
+            worksheet_write_string(worksheet, row, 16, "ja", NULL);  // ping successfull, update to success
+        }
+    }
+
+    IcmpCloseHandle(hIcmpFile);
+    free(ReplyBuffer);
 }
 
 int main(){
@@ -286,6 +326,7 @@ int main(){
     char concatenatedIP[16]; 
     for(size_t min = ipRange.minSuffix; (min <= ipRange.maxSuffix && min <= 254); min++){
         snprintf(concatenatedIP, sizeof(concatenatedIP), "%s%d", ipRange.IPPrefix, min);    // concatenate prefix and suffix to create whole IP
+        checkForPingAnswer(concatenatedIP, worksheet, min - ipRange.minSuffix + 1);
         connectAndFetchIED(connection, &err, concatenatedIP, tcpPort, worksheet, min - ipRange.minSuffix + 1);       // connect to IED and fetch its' data
     } 
     
