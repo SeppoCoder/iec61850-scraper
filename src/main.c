@@ -23,6 +23,10 @@
 // xlsx library for handling writing to excel spreadsheet
 #include "xlsxwriter.h"
 
+#define IPCOL 0
+#define PINGCOL 6
+#define MMSCOL 7
+
 // Define a struct to hold the network data
 typedef struct {
     char  hostname[32];
@@ -40,13 +44,23 @@ typedef struct {
     int success;
 } IPRange;
 
+void initWorksheet(lxw_worksheet *worksheet){
+    const char *titles[] = {"Device", "Name", "Vendor", "Model", "S/N", "SW Version", "Ping", "MMS"};
+    for(size_t i = 0; i < sizeof(titles) / sizeof(titles[0]); i++){
+        worksheet_write_string(worksheet, 0, i, titles[i], NULL);
+    }
+}
+
 /* returns the name of the first logical device found, NULL if not found. */
 const char *get_LD_name(IedConnection con, IedClientError *err){
     LinkedList LDList = IedConnection_getServerDirectory(con, err, false);  // fetch all Logical devices
     if (LDList != NULL){
-        LinkedList LD = LinkedList_getNext(LDList); // get first logical device
-        if (LD != NULL){
-            return LD->data;    // return the name (data) of the LD
+        if(!LinkedList_contains(LDList, "LD0")){   
+            LinkedList firstLD = LinkedList_getNext(LDList); // get first logical device
+            if(firstLD != NULL){ return firstLD->data; }  // return first element in the list if LDO isn't in the list
+        }else{
+            printf("Found device LD0\n");
+            return "LD0";
         }
     }
     return NULL;
@@ -147,13 +161,10 @@ IPRange getIPRange(NetworkInfo *netInfo){
     return range;
 }
 
-
-//PING to see if it answers
-
-
-NetworkInfo findMatchingNetwork(wchar_t *SSIDs[], size_t size){
+NetworkInfo findMatchingNetwork(){
+    wchar_t *SSIDs[] = {L"Stationsbuss", L"StationsBuss", L"lo", L"stationbuss", L"stationsBuss", L"STATIONSBUSS" }; // array of network names to look for 
     NetworkInfo netInfo;
-    for (size_t i = 0; i < size; i++)
+    for (size_t i = 0; i < sizeof(SSIDs) / sizeof(SSIDs[0]); i++)
     {
         netInfo = getInfoFromNetwork(SSIDs[i]);
         if(netInfo.success){
@@ -165,89 +176,43 @@ NetworkInfo findMatchingNetwork(wchar_t *SSIDs[], size_t size){
     return netInfo;
 }
 
-void processDeviceData(IedConnection con, IedClientError *err, const char *deviceName, lxw_worksheet *worksheet){
+void processDeviceData(IedConnection con, IedClientError *err, const char *deviceName, lxw_worksheet *worksheet, int row){
     // possible paths for accessing data attributes
+    const char *dataAttributes[] = {"name", "vendor", "model", "serNum", "swRev"};  // data attributes to search for in IED
     const char *topLevelPaths[] = {"LPHD0", "LPHD1", "LLN0"};
     const char *midLevelPaths[] = {"PhyNam", "NamPlt", "PhyHealth"};
-    const char *dataAttributePaths[] = {"model", "serNum", "vendor", "name", "swRev"};
     char daRef[50];     // create buffer for copy and modification of attribute path
+
     /* iterate through all possible paths from the given path lists */
-    for(size_t daIndex = 0; daIndex < sizeof(dataAttributePaths) / sizeof(dataAttributePaths[0]); daIndex++){
+    size_t dataAttributeSize = sizeof(dataAttributes) / sizeof(dataAttributes[0]);
+    for(size_t daIndex = 0; daIndex < dataAttributeSize; daIndex++){
         for (size_t top = 0; top < sizeof(topLevelPaths) / sizeof(topLevelPaths[0]); top++){
             for(size_t mid = 0; mid < sizeof(midLevelPaths) / sizeof(midLevelPaths[0]); mid++){
 
-                snprintf(daRef, sizeof(daRef), "%s/%s.%s.%s", deviceName, topLevelPaths[top], midLevelPaths[mid], dataAttributePaths[daIndex]);     //concatenate the different paths to a full path
+                snprintf(daRef, sizeof(daRef), "%s/%s.%s.%s", deviceName, topLevelPaths[top], midLevelPaths[mid], dataAttributes[daIndex]);     //concatenate the different paths to a full path
                 MmsValue *value = IedConnection_readObject(con, err, daRef, IEC61850_FC_DC);    // read object at path
-
                 if(value != NULL){
-                    lxw_error xlsxError;
-                    switch (MmsValue_getType(value)){    // Parse result based on data type
-
-                        case MMS_VISIBLE_STRING:
-                        case MMS_STRING: {
-                            const char *strVal = MmsValue_toString(value);
-                            xlsxError = worksheet_write_string(worksheet, 1, daIndex+1, strVal, NULL);  // write value to spreadsheet
-                            printf("read string value '%s' at path '%s'\n", strVal, daRef);
-                            break;
-                        }
-
-                        case MMS_INTEGER:
-                        case MMS_UNSIGNED: {
-                            int intVal = MmsValue_toInt32(value);
-                            xlsxError = worksheet_write_number(worksheet, 1, daIndex+1, intVal, NULL);  // write value to spreadsheet
-                            printf("read number value: %d\n", intVal);
-                            break;
-                        }
-
-                        case MMS_BOOLEAN: {
-                            bool boolVal = MmsValue_getBoolean(value);
-                            xlsxError = worksheet_write_boolean(worksheet, 1, daIndex+1, boolVal, NULL);  // write value to spreadsheet
-                            printf("read boolean value: %d\n", boolVal);
-                            break;
-                        }
-
-                        default:
-                            break;
-                    }
-                    if(xlsxError != LXW_NO_ERROR){
-                        printf("failed to write value to workbook. \n REASON: %s\n", strerror(xlsxError));
-                    }
+                    const char *strVal = MmsValue_toString(value);
+                    worksheet_write_string(worksheet, row, daIndex + 1, strVal, NULL);
                 }
                 else{
                     printf("Error reading from object!\n REASON: %s\n", IedClientError_toString(*err));
                 }
                 MmsValue_delete(value);
-
             }
         }
-        worksheet_write_string(worksheet, 0, daIndex+1, dataAttributePaths[daIndex], NULL);  // write the data attribute name to spreadsheet
     }
 }
 
-void connectAndFetchIED(IedConnection connection, IedClientError *err, const char *deviceIP, int tcpPort, lxw_worksheet *worksheet, int row){
+bool connectToIED(IedConnection connection, IedClientError *err, const char *deviceIP, int tcpPort, lxw_worksheet *worksheet, int row){
     IedConnection_connect(connection, err, deviceIP, tcpPort);     // connect to physical device using the connection above
     printf("Connecting to %s:%i\n", deviceIP, tcpPort);
-    worksheet_write_string(worksheet, 0, 0, "IP", NULL);    
-    worksheet_write_string(worksheet, row, 0, deviceIP, NULL);    // write IP-address to excel worksheet
-    worksheet_write_string(worksheet, 0, 15, "MMS svar?", NULL);  // does this device connect successfully?
-
-    if (*err != IED_ERROR_OK)
-    {
-        printf("couldn't connect to %s:%i\n", deviceIP, tcpPort);  
-        worksheet_write_string(worksheet, row, 15, "nej", NULL); 
-        return;
+    if (*err == IED_ERROR_OK){
+        worksheet_write_string(worksheet, row, MMSCOL, "ja", NULL); // successfull connect
+        return true;
     }
-
-    printf("Connected!\n\n");
-    worksheet_write_string(worksheet, row, 15, "ja", NULL);
-
-    const char *deviceName = get_LD_name(connection, err);   // fetch name of logical device
-    if(deviceName == NULL){
-        printf("couldn't find device name\n");  
-        return; 
-    }
-
-    processDeviceData(connection, err, deviceName, worksheet);
+    worksheet_write_string(worksheet, row, MMSCOL, "nej", NULL); // unsuccessfull connect
+    return false; 
 }
 
 void checkForPingAnswer(const char *ipAddress, lxw_worksheet *worksheet, int row){
@@ -257,10 +222,9 @@ void checkForPingAnswer(const char *ipAddress, lxw_worksheet *worksheet, int row
     char SendData[32] = "Data Buffer";
     LPVOID ReplyBuffer = NULL;
     DWORD ReplySize = 0;
-
-    worksheet_write_string(worksheet, 0, 16, "Ping", NULL);
-    worksheet_write_string(worksheet, row, 16, "nej", NULL); // init as fail
     
+    worksheet_write_string(worksheet, row, PINGCOL, "nej", NULL);   // initialize to unsuccessfull ping in spreadsheet
+        
     ipaddr = inet_addr(ipAddress);  // convert ip to be able to send with ICMP
     if (ipaddr == INADDR_NONE) { return; }
     
@@ -272,7 +236,7 @@ void checkForPingAnswer(const char *ipAddress, lxw_worksheet *worksheet, int row
     ReplyBuffer = (VOID*) malloc(ReplySize);    
     if (ReplyBuffer == NULL) { 
         IcmpCloseHandle(hIcmpFile);
-        return;
+        return; 
     }   
     
     dwRetVal = IcmpSendEcho(hIcmpFile, ipaddr, SendData, sizeof(SendData), 
@@ -281,13 +245,14 @@ void checkForPingAnswer(const char *ipAddress, lxw_worksheet *worksheet, int row
     if (dwRetVal != 0) {
         PICMP_ECHO_REPLY pEchoReply = (PICMP_ECHO_REPLY)ReplyBuffer;
         if (pEchoReply->Status == 0) {
-            worksheet_write_string(worksheet, row, 16, "ja", NULL);  // ping successfull, update to success
+            worksheet_write_string(worksheet, row, PINGCOL, "ja", NULL);  // ping sent successfully, update spreadsheet
         }
     }
 
     IcmpCloseHandle(hIcmpFile);
     free(ReplyBuffer);
 }
+
 
 int main(){
     int exitCode = 0;
@@ -300,15 +265,15 @@ int main(){
     }
 
     // try to find station network
-    wchar_t *SSIDs[] = {L"Stationsbuss", L"StationsBuss", L"lo", L"stationbuss", L"stationsBuss" }; // array of network names to look for 
-    NetworkInfo netInfo = findMatchingNetwork(SSIDs, sizeof(SSIDs) / sizeof(SSIDs[0])); 
+    NetworkInfo netInfo = findMatchingNetwork(); 
+
     if(!netInfo.success){
         printf("coudln't find any suitable network!\n");
         exitCode = -1;
         goto exit_wo_cleanup;
     }
 
-    IPRange ipRange = getIPRange(&netInfo);
+    IPRange ipRange = getIPRange(&netInfo); // calculate ranges of IP addresses
     if(ipRange.success == 0){
         printf("Couldn't calculate IP range!");
         exitCode = -1;
@@ -319,17 +284,26 @@ int main(){
     const char workbookName[] = "stationsinformation.xlsx";
     lxw_workbook  *workbook  = workbook_new(workbookName);    // create a new workbook
     lxw_worksheet *worksheet = workbook_add_worksheet(workbook, NULL);  // add a sheet to the newly created workbook
+    initWorksheet(worksheet);   // initialize worksheet with titles
     IedConnection connection = IedConnection_create();  // create a connection
     IedClientError err;     // error reason
 
     int tcpPort = 102;  // TCP port of device (IEC 16850 has port 102 as standard)
     char concatenatedIP[16]; 
     for(size_t min = ipRange.minSuffix; (min <= ipRange.maxSuffix && min <= 254); min++){
+        int row = min - ipRange.minSuffix + 1;
         snprintf(concatenatedIP, sizeof(concatenatedIP), "%s%d", ipRange.IPPrefix, min);    // concatenate prefix and suffix to create whole IP
-        checkForPingAnswer(concatenatedIP, worksheet, min - ipRange.minSuffix + 1);
-        connectAndFetchIED(connection, &err, concatenatedIP, tcpPort, worksheet, min - ipRange.minSuffix + 1);       // connect to IED and fetch its' data
+        worksheet_write_string(worksheet, row, IPCOL, concatenatedIP, NULL);  // write device IP address to spreadsheet
+
+        checkForPingAnswer(concatenatedIP, worksheet, row);   // check if device answers to ping
+
+        bool canConnect = connectToIED(connection, &err, concatenatedIP, tcpPort, worksheet, row);    // connect to IED
+        if(canConnect){
+            const char *deviceName = get_LD_name(connection, &err);  // fetch name of logical device
+            processDeviceData(connection, &err, deviceName, worksheet, row);   // read device data and write it to the worksheet
+        }
     } 
-    
+
 cleanup:
     IedConnection_destroy(connection);
     workbook_close(workbook);   // close and save workbook
@@ -339,6 +313,7 @@ cleanup:
     return exitCode;
 
 exit_wo_cleanup:
+    printf("\n");
     printf("Exiting!");
     return exitCode;
 }   
