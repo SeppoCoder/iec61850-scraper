@@ -178,22 +178,24 @@ NetworkInfo findMatchingNetwork(){
 
 void processDeviceData(IedConnection con, IedClientError *err, const char *deviceName, lxw_worksheet *worksheet, int row){
     // possible paths for accessing data attributes
-    const char *dataAttributes[] = {"name", "vendor", "model", "serNum", "swRev"};  // data attributes to search for in IED
     const char *topLevelPaths[] = {"LPHD0", "LPHD1", "LLN0"};
     const char *midLevelPaths[] = {"PhyNam", "NamPlt", "PhyHealth"};
+    const char *dataAttributes[] = {"name", "vendor", "model", "serNum", "swRev"};  // data attributes to search for in IED
     char daRef[50];     // create buffer for copy and modification of attribute path
 
     /* iterate through all possible paths from the given path lists */
     size_t dataAttributeSize = sizeof(dataAttributes) / sizeof(dataAttributes[0]);
-    for(size_t daIndex = 0; daIndex < dataAttributeSize; daIndex++){
-        for (size_t top = 0; top < sizeof(topLevelPaths) / sizeof(topLevelPaths[0]); top++){
-            for(size_t mid = 0; mid < sizeof(midLevelPaths) / sizeof(midLevelPaths[0]); mid++){
-
+    for (size_t top = 0; top < sizeof(topLevelPaths) / sizeof(topLevelPaths[0]); top++){
+        for(size_t mid = 0; mid < sizeof(midLevelPaths) / sizeof(midLevelPaths[0]); mid++){
+            for(size_t daIndex = 0; daIndex < dataAttributeSize; daIndex++){
                 snprintf(daRef, sizeof(daRef), "%s/%s.%s.%s", deviceName, topLevelPaths[top], midLevelPaths[mid], dataAttributes[daIndex]);     //concatenate the different paths to a full path
                 MmsValue *value = IedConnection_readObject(con, err, daRef, IEC61850_FC_DC);    // read object at path
                 if(value != NULL){
                     const char *strVal = MmsValue_toString(value);
-                    worksheet_write_string(worksheet, row, daIndex + 1, strVal, NULL);
+                    if(strVal != NULL && strVal[0] != '\0'){
+                        worksheet_write_string(worksheet, row, daIndex + 1, strVal, NULL);  // write to worksheet if the string isn't empty
+                        break;
+                    }
                 }
                 else{
                     printf("Error reading from object!\n REASON: %s\n", IedClientError_toString(*err));
