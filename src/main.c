@@ -1,6 +1,13 @@
-// gcc main.c -o main -liec61850 -lxlsxwriter
-
-/* x86_64-w64-mingw32-gcc src/main.c -o src/main.exe -I/home/sebli/libiec61850/.install/include -I/home/sebli/libxlsxwriter/include -L/home/sebli/iec61850-scraper/libs -liec61850 -lxlsxwriter -lz -liphlpapi -lws2_32 -lbcrypt */
+/*
+*   main.c   
+*
+*   Author: Sebastian Ling
+*   Last modified: 2026-07-03
+*
+*   ------------- Compiling and running the program -------------
+*   Compiling on linux with mingw32: x86_64-w64-mingw32-gcc src/main.c -o src/main.exe -I/home/sebli/libiec61850/.install/include -I/home/sebli/libxlsxwriter/include -L/home/sebli/iec61850-scraper/libs -liec61850 -lxlsxwriter -lz -liphlpapi -lws2_32 -lbcrypt
+*   Running on linux with wine: sudo wine src/main.exe 
+*/
 
 #if defined _WIN32 || defined _WIN64
     #include <winsock2.h>
@@ -23,8 +30,6 @@
 // xlsx library for handling writing to excel spreadsheet
 #include "xlsxwriter.h"
 
-#define MAP_MAX_SIZE 100
-
 // Define a struct to hold the network data
 typedef struct {
     char  hostname[32];
@@ -33,6 +38,7 @@ typedef struct {
     int success; 
 } NetworkInfo;
 
+// struct for holding info about the IP range
 typedef struct {
     char IPPrefix[16];
     char hostMin[16];
@@ -42,12 +48,14 @@ typedef struct {
     int success;
 } IPRange;
 
+// struct for mapping spreadsheet title and data attribute
 typedef struct {
     char *title;
     char *dataAttributeRef;
-} xlsxColumnMapping;
+} spreadsheetColumnMapping;
 
-xlsxColumnMapping schema[] = {
+/* schema for keeping track of which spreadsheet titles that match to witch data */
+spreadsheetColumnMapping schema[] = {
     {"Device", "IP"},
     {"Name", "name"},
     {"Vendor", "vendor"},
@@ -57,10 +65,11 @@ xlsxColumnMapping schema[] = {
     {"Ping", "ping"},
     {"MMS", "mms"}
 };
-const int NUM_COLUMNS = sizeof(schema) / sizeof(schema[0]);
+const int NUM_COLUMNS = sizeof(schema) / sizeof(schema[0]); 
 
 const wchar_t *SSIDs[] = {L"Stationsbuss", L"StationsBuss", L"lo", L"stationbuss", L"stationsBuss", L"STATIONSBUSS" }; // array of network names to look for 
 
+/* Returns the column index for the given title for the spreadsheet, -1 if not found. */
 int get_column_index(const char* targetTitle) {
     for (int i = 0; i < NUM_COLUMNS; i++) {
         // Compare the target title with the schema
@@ -77,7 +86,7 @@ void initWorksheet(lxw_worksheet *worksheet){
     }
 }
 
-/* returns the name of the first logical device found, NULL if not found. */
+/* Tries to find logical device 'LD0', if not found it return the first logical device. returns NULL if no devices found. */
 const char *get_LD_name(IedConnection con, IedClientError *err){
     LinkedList LDList = IedConnection_getServerDirectory(con, err, false);  // fetch all Logical devices
     if (LDList != NULL){
@@ -92,6 +101,7 @@ const char *get_LD_name(IedConnection con, IedClientError *err){
     return NULL;
 }
 
+/* Tries to find the network with the given friendlyName */
 NetworkInfo getInfoFromNetwork(const wchar_t *friendlyName){
     NetworkInfo info = {0}; // initialize "empty" struct
 
@@ -153,6 +163,7 @@ NetworkInfo getInfoFromNetwork(const wchar_t *friendlyName){
     return info;
 }
 
+/* calculates and return info about the available IP range of this subnet */
 IPRange getIPRange(NetworkInfo *netInfo){
     IPRange range = {0};
     range.success = 0;  // init to fail
@@ -169,7 +180,7 @@ IPRange getIPRange(NetworkInfo *netInfo){
     if(lastHostToi == 0){ return range; }   // conversion not valid
 
     unsigned subnetIndex = floor(lastHostToi / (usableIPAddresses + 2)); // calculate in which subnet our host is in
-    range.minSuffix = 1 + subnetIndex * (usableIPAddresses + 2);        // calculate min host
+    range.minSuffix = 2 + subnetIndex * (usableIPAddresses + 2);        // calculate min host
     range.maxSuffix = range.minSuffix + usableIPAddresses - 1;    // calculate max host
     if(range.minSuffix > range.maxSuffix) { return range; }
 
@@ -187,6 +198,7 @@ IPRange getIPRange(NetworkInfo *netInfo){
     return range;
 }
 
+/* Tries to find and return info about an available network out of those given by the list of SSIDs. */
 NetworkInfo findMatchingNetwork(){
     NetworkInfo netInfo;
     for (size_t i = 0; i < sizeof(SSIDs) / sizeof(SSIDs[0]); i++)
@@ -201,13 +213,14 @@ NetworkInfo findMatchingNetwork(){
     return netInfo;
 }
 
+/* Tries to find the given global data attributes and write their data to the worksheet. */
 void processDeviceData(IedConnection con, IedClientError *err, const char *deviceName, lxw_worksheet *worksheet, int row){
     // possible paths for accessing data attributes
     const char *topLevelPaths[] = {"LPHD0", "LPHD1", "LLN0"};
     const char *midLevelPaths[] = {"PhyNam", "NamPlt", "PhyHealth"};
     char daRef[50];     // create buffer for copy and modification of attribute path
 
-    /* iterate through all possible paths from the given path lists */
+    /* iterate through all possible paths or until some data is found for each data attribute */
     for (size_t top = 0; top < sizeof(topLevelPaths) / sizeof(topLevelPaths[0]); top++){
         for(size_t mid = 0; mid < sizeof(midLevelPaths) / sizeof(midLevelPaths[0]); mid++){
             for(size_t daIndex = 0; daIndex < NUM_COLUMNS; daIndex++){
@@ -229,7 +242,8 @@ void processDeviceData(IedConnection con, IedClientError *err, const char *devic
     }
 }
 
-bool connectToIED(IedConnection connection, IedClientError *err, const char *deviceIP, int tcpPort, lxw_worksheet *worksheet, int row){
+/* Checks if we can connect to the given IP via IEC61850 MMS, and writes the result to the worksheet. */
+bool canConnectToIED(IedConnection connection, IedClientError *err, const char *deviceIP, int tcpPort, lxw_worksheet *worksheet, int row){
     IedConnection_connect(connection, err, deviceIP, tcpPort);     // connect to physical device using the connection above
 
     int MMSCol = get_column_index("MMS");
@@ -241,6 +255,7 @@ bool connectToIED(IedConnection connection, IedClientError *err, const char *dev
     return false; 
 }
 
+/* Checks if the device with the given IP address is pingable, and writes the result to the worksheet. */
 void checkForPingAnswer(const char *ipAddress, lxw_worksheet *worksheet, int row){
     HANDLE hIcmpFile;
     unsigned long ipaddr = INADDR_NONE;
@@ -327,7 +342,7 @@ int main(){
 
         checkForPingAnswer(concatenatedIP, worksheet, row);   // check if device answers to ping
 
-        bool canConnect = connectToIED(connection, &err, concatenatedIP, tcpPort, worksheet, row);    // connect to IED
+        bool canConnect = canConnectToIED(connection, &err, concatenatedIP, tcpPort, worksheet, row);    // connect to IED
         if(canConnect){
             const char *deviceName = get_LD_name(connection, &err);  // fetch name of logical device
             processDeviceData(connection, &err, deviceName, worksheet, row);   // read device data and write it to the worksheet
