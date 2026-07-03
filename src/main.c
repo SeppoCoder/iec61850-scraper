@@ -23,9 +23,7 @@
 // xlsx library for handling writing to excel spreadsheet
 #include "xlsxwriter.h"
 
-#define IPCOL 0
-#define PINGCOL 6
-#define MMSCOL 7
+#define MAP_MAX_SIZE 100
 
 // Define a struct to hold the network data
 typedef struct {
@@ -44,10 +42,38 @@ typedef struct {
     int success;
 } IPRange;
 
+typedef struct {
+    char *title;
+    char *dataAttributeRef;
+} xlsxColumnMapping;
+
+xlsxColumnMapping schema[] = {
+    {"Device", "IP"},
+    {"Name", "name"},
+    {"Vendor", "vendor"},
+    {"Model", "model"},
+    {"S/N", "serNum"},
+    {"SW Version", "swRev"},
+    {"Ping", "ping"},
+    {"MMS", "mms"}
+};
+const int NUM_COLUMNS = sizeof(schema) / sizeof(schema[0]);
+
+const wchar_t *SSIDs[] = {L"Stationsbuss", L"StationsBuss", L"lo", L"stationbuss", L"stationsBuss", L"STATIONSBUSS" }; // array of network names to look for 
+
+int get_column_index(const char* targetTitle) {
+    for (int i = 0; i < NUM_COLUMNS; i++) {
+        // Compare the target title with the schema
+        if (strcmp(schema[i].title, targetTitle) == 0) {
+            return i; 
+        }
+    }
+    return -1; // didnt find the title
+}
+
 void initWorksheet(lxw_worksheet *worksheet){
-    const char *titles[] = {"Device", "Name", "Vendor", "Model", "S/N", "SW Version", "Ping", "MMS"};
-    for(size_t i = 0; i < sizeof(titles) / sizeof(titles[0]); i++){
-        worksheet_write_string(worksheet, 0, i, titles[i], NULL);
+    for(size_t i = 0; i < NUM_COLUMNS; i++){
+        worksheet_write_string(worksheet, 0, i, schema[i].title, NULL);
     }
 }
 
@@ -66,7 +92,7 @@ const char *get_LD_name(IedConnection con, IedClientError *err){
     return NULL;
 }
 
-NetworkInfo getInfoFromNetwork(wchar_t *friendlyName){
+NetworkInfo getInfoFromNetwork(const wchar_t *friendlyName){
     NetworkInfo info = {0}; // initialize "empty" struct
 
     // Setup variables for GetAdaptersAddresses
@@ -105,7 +131,7 @@ NetworkInfo getInfoFromNetwork(wchar_t *friendlyName){
                     // Convert the numeric IP to a readable string
                     inet_ntop(AF_INET, &(sa_in->sin_addr), ipString, sizeof(ipString));
                     
-                    printf("  IP Address: %s /%d\n", ipString, pUnicast->OnLinkPrefixLength);
+                    printf("IP Address: %s /%d\n", ipString, pUnicast->OnLinkPrefixLength);
                     strncpy(info.ip, ipString, sizeof(info.ip));
                     info.subnet_mask = pUnicast->OnLinkPrefixLength;
                     info.success = 1;
@@ -119,7 +145,7 @@ NetworkInfo getInfoFromNetwork(wchar_t *friendlyName){
         info.success = 0;
     }
 
-    // 7. Cleanup
+    // Cleanup
     if (pAddresses) {
         free(pAddresses);
     }
@@ -162,7 +188,6 @@ IPRange getIPRange(NetworkInfo *netInfo){
 }
 
 NetworkInfo findMatchingNetwork(){
-    wchar_t *SSIDs[] = {L"Stationsbuss", L"StationsBuss", L"lo", L"stationbuss", L"stationsBuss", L"STATIONSBUSS" }; // array of network names to look for 
     NetworkInfo netInfo;
     for (size_t i = 0; i < sizeof(SSIDs) / sizeof(SSIDs[0]); i++)
     {
@@ -180,20 +205,18 @@ void processDeviceData(IedConnection con, IedClientError *err, const char *devic
     // possible paths for accessing data attributes
     const char *topLevelPaths[] = {"LPHD0", "LPHD1", "LLN0"};
     const char *midLevelPaths[] = {"PhyNam", "NamPlt", "PhyHealth"};
-    const char *dataAttributes[] = {"name", "vendor", "model", "serNum", "swRev"};  // data attributes to search for in IED
     char daRef[50];     // create buffer for copy and modification of attribute path
 
     /* iterate through all possible paths from the given path lists */
-    size_t dataAttributeSize = sizeof(dataAttributes) / sizeof(dataAttributes[0]);
     for (size_t top = 0; top < sizeof(topLevelPaths) / sizeof(topLevelPaths[0]); top++){
         for(size_t mid = 0; mid < sizeof(midLevelPaths) / sizeof(midLevelPaths[0]); mid++){
-            for(size_t daIndex = 0; daIndex < dataAttributeSize; daIndex++){
-                snprintf(daRef, sizeof(daRef), "%s/%s.%s.%s", deviceName, topLevelPaths[top], midLevelPaths[mid], dataAttributes[daIndex]);     //concatenate the different paths to a full path
+            for(size_t daIndex = 0; daIndex < NUM_COLUMNS; daIndex++){
+                snprintf(daRef, sizeof(daRef), "%s/%s.%s.%s", deviceName, topLevelPaths[top], midLevelPaths[mid], schema[daIndex].dataAttributeRef);     //concatenate the different paths to a full path
                 MmsValue *value = IedConnection_readObject(con, err, daRef, IEC61850_FC_DC);    // read object at path
                 if(value != NULL){
                     const char *strVal = MmsValue_toString(value);
                     if(strVal != NULL && strVal[0] != '\0'){
-                        worksheet_write_string(worksheet, row, daIndex + 1, strVal, NULL);  // write to worksheet if the string isn't empty
+                        worksheet_write_string(worksheet, row, daIndex, strVal, NULL);  // write to worksheet if the string isn't empty
                         break;
                     }
                 }
@@ -208,12 +231,13 @@ void processDeviceData(IedConnection con, IedClientError *err, const char *devic
 
 bool connectToIED(IedConnection connection, IedClientError *err, const char *deviceIP, int tcpPort, lxw_worksheet *worksheet, int row){
     IedConnection_connect(connection, err, deviceIP, tcpPort);     // connect to physical device using the connection above
-    printf("Connecting to %s:%i\n", deviceIP, tcpPort);
+
+    int MMSCol = get_column_index("MMS");
     if (*err == IED_ERROR_OK){
-        worksheet_write_string(worksheet, row, MMSCOL, "ja", NULL); // successfull connect
+        worksheet_write_string(worksheet, row, MMSCol, "ja", NULL); // successfull connect
         return true;
     }
-    worksheet_write_string(worksheet, row, MMSCOL, "nej", NULL); // unsuccessfull connect
+    worksheet_write_string(worksheet, row, MMSCol, "nej", NULL); // unsuccessfull connect
     return false; 
 }
 
@@ -225,10 +249,11 @@ void checkForPingAnswer(const char *ipAddress, lxw_worksheet *worksheet, int row
     LPVOID ReplyBuffer = NULL;
     DWORD ReplySize = 0;
     
-    worksheet_write_string(worksheet, row, PINGCOL, "nej", NULL);   // initialize to unsuccessfull ping in spreadsheet
-        
+    int PingCol = get_column_index("Ping"); // get the column where ping should be stored in spreadsheet
+    worksheet_write_string(worksheet, row, PingCol, "nej", NULL);   // initialize to unsuccessfull ping in spreadsheet   
     ipaddr = inet_addr(ipAddress);  // convert ip to be able to send with ICMP
     if (ipaddr == INADDR_NONE) { return; }
+
     
     hIcmpFile = IcmpCreateFile();   // open handler for ICMP echo request
     if (hIcmpFile == INVALID_HANDLE_VALUE) { return; } 
@@ -247,8 +272,10 @@ void checkForPingAnswer(const char *ipAddress, lxw_worksheet *worksheet, int row
     if (dwRetVal != 0) {
         PICMP_ECHO_REPLY pEchoReply = (PICMP_ECHO_REPLY)ReplyBuffer;
         if (pEchoReply->Status == 0) {
-            worksheet_write_string(worksheet, row, PINGCOL, "ja", NULL);  // ping sent successfully, update spreadsheet
+            worksheet_write_string(worksheet, row, PingCol, "ja", NULL);  // ping sent successfully, update spreadsheet
         }
+    }else{
+        printf("last error: %d\n", GetLastError());
     }
 
     IcmpCloseHandle(hIcmpFile);
@@ -292,10 +319,11 @@ int main(){
 
     int tcpPort = 102;  // TCP port of device (IEC 16850 has port 102 as standard)
     char concatenatedIP[16]; 
+    int IPCol = get_column_index("Device");
     for(size_t min = ipRange.minSuffix; (min <= ipRange.maxSuffix && min <= 254); min++){
         int row = min - ipRange.minSuffix + 1;
         snprintf(concatenatedIP, sizeof(concatenatedIP), "%s%d", ipRange.IPPrefix, min);    // concatenate prefix and suffix to create whole IP
-        worksheet_write_string(worksheet, row, IPCOL, concatenatedIP, NULL);  // write device IP address to spreadsheet
+        worksheet_write_string(worksheet, row, IPCol, concatenatedIP, NULL);  // write device IP address to spreadsheet
 
         checkForPingAnswer(concatenatedIP, worksheet, row);   // check if device answers to ping
 
