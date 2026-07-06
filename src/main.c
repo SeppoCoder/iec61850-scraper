@@ -115,6 +115,7 @@ int main(){
             processDeviceData(connection, &err, deviceName, worksheet, row, NUM_COLUMNS, schema, worksheetError ,fptr);   // read device data and write it to the worksheet
         }
         fprintf(fptr, "\n");
+        IedConnection_close(connection);
     } 
 
 cleanup:

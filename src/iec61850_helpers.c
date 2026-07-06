@@ -20,6 +20,7 @@ bool canConnectToIED(IedConnection connection, IedClientError *err, const char *
         fprintf(fptr, "Couldn't write to worksheet, returned with error code %d (%c).\n", worksheetError, lxw_strerror(worksheetError));
     }
     fprintf(fptr, "Couldn't connect to device!\n");
+    fprintf(fptr, "Error: %s\n", IedClientError_toString(*err));
     return false; 
 }
 
@@ -35,6 +36,7 @@ void processDeviceData(IedConnection con, IedClientError *err, const char *devic
         for(size_t mid = 0; mid < sizeof(midLevelPaths) / sizeof(midLevelPaths[0]); mid++){
             for(size_t daIndex = 0; daIndex < NUM_COLUMNS; daIndex++){
                 snprintf(daRef, sizeof(daRef), "%s/%s.%s.%s", deviceName, topLevelPaths[top], midLevelPaths[mid], schema[daIndex].dataAttributeRef);     //concatenate the different paths to a full path
+                fprintf(fptr, "reading from path: %s\n", daRef);
                 MmsValue *value = IedConnection_readObject(con, err, daRef, IEC61850_FC_DC);    // read object at path
                 if(value != NULL){
                     const char *strVal = MmsValue_toString(value);
@@ -43,6 +45,7 @@ void processDeviceData(IedConnection con, IedClientError *err, const char *devic
                         if (worksheetError != LXW_NO_ERROR){
                             fprintf(fptr, "Couldn't write to worksheet, returned with error code %d (%c).\n", worksheetError, lxw_strerror(worksheetError));
                         }
+                        fprintf(fptr, "Successfull read from path: %s\n", daRef);
                         break;
                     }
                 }
