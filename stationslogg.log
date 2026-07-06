@@ -1,9 +1,11 @@
 Finding available network...
 Fetching network info from 'Stationsbuss'
 Fetching network info from 'StationsBuss'
+Fetching network info from 'stationbuss'
+Fetching network info from 'stationsBuss'
+Fetching network info from 'STATIONSBUSS'
+Couldn't fetch info from predefined networks, asking user.
 Fetching network info from 'lo'
-found network 'lo' with IP: 127.0.0.1, and netmask: 8
-
 Calculating IP Range...
 IP in range 127.0.0.2 - 127.0.0.1677721
 

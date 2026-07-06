@@ -1,6 +1,0 @@
-creds: {
-    user: sebli,
-    pass: samba
-}
-
-run sudo virt-manager to open VM manager 

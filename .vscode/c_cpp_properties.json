@@ -23,7 +23,8 @@
             "includePath": [
                 "/home/sebli/iec61850-scraper/**",
                 "/home/sebli/libiec61850/.install/include/",
-                "/home/sebli/libxlsxwriter/include/"
+                "/home/sebli/libxlsxwriter/include/",
+                "${workspaceFolder}/headers/"
             ],
             "defines": [],
             "cStandard": "c99",
