@@ -22,9 +22,11 @@
 bool canConnectToIED(IedConnection connection, IedClientError *err, const char *deviceIP, int tcpPort, lxw_worksheet *worksheet, int row, lxw_error worksheetError, FILE *fptr, int MMSCol);
 
 /* Tries to find the given global data attributes and write their data to the worksheet. */
-void processDeviceData(IedConnection con, IedClientError *err, const char *deviceName, lxw_worksheet *worksheet, int row, int NUM_COLUMNS, spreadsheetColumnMapping schema[], lxw_error worksheetError, FILE *fptr);
+void processDeviceData(IedConnection con, IedClientError *err, const char *deviceName, const char *nodeName, lxw_worksheet *worksheet, int row, lxw_error worksheetError, FILE *fptr);
 
 /* Tries to find logical device 'LD0', if not found it return the first logical device. returns NULL if no devices found. */
 const char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr);
+
+const char *findLogicalNode(LinkedList logicalNodes);
 
 #endif

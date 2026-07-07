@@ -33,7 +33,7 @@ IPRange getIPRange(NetworkInfo *netInfo, FILE *fptr);
 NetworkInfo findMatchingNetwork(FILE *fptr);
 
 /* Checks if the device with the given IP address is pingable, and writes the result to the worksheet. */
-void checkForPingAnswer(const char *ipAddress, lxw_worksheet *worksheet, int row, lxw_error worksheetError, FILE *fptr, int pingCol);
+bool checkForPingAnswer(const char *ipAddress, lxw_worksheet *worksheet, int row, lxw_error worksheetError, FILE *fptr, int pingCol);
 
 /* Fetch the names of all found networks and return how many found */
 int fetchAvailableNetworks(char *ptr[]);

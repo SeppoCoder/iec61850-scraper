@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <math.h>
+#include <stdbool.h>
 
 #include "networking.h"
 
@@ -61,7 +62,6 @@ NetworkInfo getInfoFromNetwork(const wchar_t *friendlyName, FILE *fptr){
                     // Convert the numeric IP to a readable string
                     inet_ntop(AF_INET, &(sa_in->sin_addr), ipString, sizeof(ipString));
                     
-                    printf("IP Address: %s /%d\n", ipString, pUnicast->OnLinkPrefixLength);
                     strncpy(info.ip, ipString, sizeof(info.ip));
                     info.subnet_mask = pUnicast->OnLinkPrefixLength;
                     info.success = 1;
@@ -150,11 +150,12 @@ NetworkInfo findMatchingNetwork(FILE *fptr){
           break;  
         } 
     }
+    fprintf(fptr, "\n");
     return netInfo;
 }  
 
 
-void checkForPingAnswer(const char *ipAddress, lxw_worksheet *worksheet, int row, lxw_error worksheetError, FILE *fptr, int pingCol){
+bool checkForPingAnswer(const char *ipAddress, lxw_worksheet *worksheet, int row, lxw_error worksheetError, FILE *fptr, int pingCol){
     fprintf(fptr, "Pinging Device...\n");
 
     HANDLE hIcmpFile;
@@ -172,14 +173,14 @@ void checkForPingAnswer(const char *ipAddress, lxw_worksheet *worksheet, int row
     ipaddr = inet_addr(ipAddress);  // convert ip to be able to send with ICMP
     if (ipaddr == INADDR_NONE) { 
         fprintf(fptr, "Unable to convert IP address.\n\n");
-        return; 
+        return false; 
     }
 
     
     hIcmpFile = IcmpCreateFile();   // open handler for ICMP echo request
     if (hIcmpFile == INVALID_HANDLE_VALUE) { 
         fprintf(fptr, "Couldn't create ICMP handler.\n\n");
-        return; 
+        return false; 
     } 
 
     // calculate size and allocate reply buffer
@@ -188,15 +189,18 @@ void checkForPingAnswer(const char *ipAddress, lxw_worksheet *worksheet, int row
     if (ReplyBuffer == NULL) { 
         fprintf(fptr, "Couldn't allocate memory for reply buffer.\n\n");
         IcmpCloseHandle(hIcmpFile);
-        return; 
+        return false; 
     }   
     
+    bool returnStatus = false;
+
     dwRetVal = IcmpSendEcho(hIcmpFile, ipaddr, SendData, sizeof(SendData), 
         NULL, ReplyBuffer, ReplySize, 1000);    // send echo request (ping)
 
     if (dwRetVal != 0) {
         PICMP_ECHO_REPLY pEchoReply = (PICMP_ECHO_REPLY)ReplyBuffer;
         if (pEchoReply->Status == 0) {
+            returnStatus = true;
             fprintf(fptr, "Successfull ping\n");
             worksheetError = worksheet_write_string(worksheet, row, pingCol, "ja", NULL);  // ping sent successfully, update spreadsheet
             if (worksheetError != LXW_NO_ERROR){
@@ -212,6 +216,8 @@ void checkForPingAnswer(const char *ipAddress, lxw_worksheet *worksheet, int row
     fprintf(fptr, "\n");
     IcmpCloseHandle(hIcmpFile);
     free(ReplyBuffer);
+    
+    return returnStatus;
 }
 
 int fetchAvailableNetworks(char *ptr[]){
