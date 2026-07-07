@@ -33,7 +33,6 @@ void processDeviceData(IedConnection con, IedClientError *err, const char *devic
     /* iterate through all data attributes*/
     for(size_t daIndex = 0; daIndex < sizeof(dataAttributes) / sizeof(dataAttributes[0]); daIndex++){
         snprintf(daRef, sizeof(daRef), "%s/%s.%s.%s", deviceName, nodeName, "PhyNam", dataAttributes[daIndex]);     //concatenate the different paths to a full path
-        fprintf(fptr, "reading from path: %s\n", daRef);
         MmsValue *value = IedConnection_readObject(con, err, daRef, IEC61850_FC_DC);    // read object at path
         if(value != NULL){
             const char *strVal = MmsValue_toString(value);
@@ -43,7 +42,8 @@ void processDeviceData(IedConnection con, IedClientError *err, const char *devic
                     fprintf(fptr, "Couldn't write to worksheet, returned with error code %d (%c).\n", worksheetError, lxw_strerror(worksheetError));
                 }
                 fprintf(fptr, "Successfull read from path: %s\n", daRef);
-                break;
+            }else{
+                fprintf(fptr, "Error reading from path: %s\n", daRef);
             }
         }
         else{
@@ -54,7 +54,7 @@ void processDeviceData(IedConnection con, IedClientError *err, const char *devic
 }
 
 
-const char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr){
+char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr){
     fprintf(fptr, "Finding logical device...\n");
     LinkedList LDList = IedConnection_getServerDirectory(con, err, false);  // fetch all Logical devices
 
@@ -79,7 +79,7 @@ const char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr){
 } 
 
 
-const char *findLogicalNode(LinkedList logicalNodes){
+char *findLogicalNode(LinkedList logicalNodes){
     char *LNsToSearch[] = {"LPHD0", "LPHD1", "LLN0"};
 
     LinkedList current = LinkedList_getNext(logicalNodes);

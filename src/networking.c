@@ -50,7 +50,7 @@ NetworkInfo getInfoFromNetwork(const wchar_t *friendlyName, FILE *fptr){
         while (pCurrAddresses != NULL) {
 
             PWCHAR netName = pCurrAddresses->FriendlyName;  // save current network name
-            if(wcsncmp(netName, friendlyName, sizeof(friendlyName)) == 0){  // check current network name against wanted network
+            if(_wcsicmp(netName, friendlyName) == 0){  // check current network name against wanted network
                 wcstombs(info.hostname, pCurrAddresses->FriendlyName, sizeof(info.hostname)); // assign and convert friendlyName to multibyte chars
 
                 // Fetch IP address and subnet mask (in CIDR format) from found network
@@ -138,18 +138,14 @@ IPRange getIPRange(NetworkInfo *netInfo, FILE *fptr){
 
 
 NetworkInfo findMatchingNetwork(FILE *fptr){
-    const wchar_t *SSIDs[] = {L"Stationsbuss", L"StationsBuss", L"stationbuss", L"stationsBuss", L"STATIONSBUSS" }; // array of network names to look for 
-
     fprintf(fptr, "Finding available network...\n");
     NetworkInfo netInfo;
-    for (size_t i = 0; i < sizeof(SSIDs) / sizeof(SSIDs[0]); i++)
-    {
-        netInfo = getInfoFromNetwork(SSIDs[i], fptr);
-        if(netInfo.success){
-          fprintf(fptr, "found network '%s' with IP: %s, and netmask: %d\n\n", netInfo.hostname, netInfo.ip, netInfo.subnet_mask);
-          break;  
-        } 
-    }
+
+    netInfo = getInfoFromNetwork(L"stationsbuss", fptr);
+    if(netInfo.success){
+        fprintf(fptr, "found network '%s' with IP: %s, and netmask: %d\n\n", netInfo.hostname, netInfo.ip, netInfo.subnet_mask);
+    } 
+
     fprintf(fptr, "\n");
     return netInfo;
 }  

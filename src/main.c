@@ -115,9 +115,9 @@ int main(){
             
             bool canConnect = canConnectToIED(connection, &err, concatenatedIP, tcpPort, worksheet, row, worksheetError, fptr, MMSCol);    // connect to IED
             if(canConnect){
-                const char *deviceName = get_LD_name(connection, &err, fptr);  // fetch name of logical device
+                char *deviceName = get_LD_name(connection, &err, fptr);  // fetch name of logical device
                 LinkedList logicalNodes = IedConnection_getLogicalDeviceDirectory(connection, &err, deviceName);    // fetch all logical nodes
-                const char *logicalNode = findLogicalNode(logicalNodes);    // find correct logical node (LPHD0, LPHD1, LLN0)
+                char *logicalNode = findLogicalNode(logicalNodes);    // find correct logical node (LPHD0, LPHD1, LLN0)
                 fprintf(fptr, "found logicalNode: %s\n\n", logicalNode);
                 processDeviceData(connection, &err, deviceName, logicalNode, worksheet, row, worksheetError ,fptr);   // read device data and write it to the worksheet
             }
@@ -136,13 +136,11 @@ cleanup:
         fprintf(fptr, "Wrote results to %s\n", workbookName);
     }
 
-    fprintf(fptr, "Disconnected from IED!\n");
+    fprintf(fptr, "IedConnection destroyed!\n");
     fprintf(fptr, "Exiting with exit code %d\n", exitCode);
-    fprintf(fptr, "\n");
     return exitCode;
 
 exit_wo_cleanup:
     fprintf(fptr, "Exiting with exit code %d\n", exitCode);
-    fprintf(fptr, "\n");
     return exitCode;
 }   
