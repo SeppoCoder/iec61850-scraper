@@ -14,6 +14,7 @@ bool canConnectToIED(IedConnection connection, IedClientError *err, const char *
             fprintf(fptr, "Couldn't write to worksheet, returned with error code %d (%c).\n", worksheetError, lxw_strerror(worksheetError));
         }
         fprintf(fptr, "Connected to device!\n\n");
+        printf("Connected to device!\n\n");
         return true;
     }
     worksheetError = worksheet_write_string(worksheet, row, MMSCol, "nej", NULL); // unsuccessfull connect
@@ -22,6 +23,8 @@ bool canConnectToIED(IedConnection connection, IedClientError *err, const char *
     }
     fprintf(fptr, "Couldn't connect to device!\n");
     fprintf(fptr, "Error: %s\n\n", IedClientError_toString(*err));
+    printf("Couldn't connect to device!\n");
+    printf("Error: %s\n\n", IedClientError_toString(*err));
     return false; 
 }
 
@@ -42,21 +45,28 @@ void processDeviceData(IedConnection con, IedClientError *err, const char *devic
                     fprintf(fptr, "Couldn't write to worksheet, returned with error code %d (%c).\n", worksheetError, lxw_strerror(worksheetError));
                 }
                 fprintf(fptr, "Successfull read from path: %s\n", daRef);
+                printf("Successfull read from path: %s\n", daRef);
             }else{
                 fprintf(fptr, "Error reading from path: %s\n", daRef);
+                printf("Error reading from path: %s\n", daRef);
             }
         }
         else{
             fprintf(fptr, "Error reading from IED!\n REASON: %s.\n", IedClientError_toString(*err));
+            printf("Error reading from IED!\n REASON: %s.\n", IedClientError_toString(*err));
         }
         MmsValue_delete(value);
     }
+    printf("\n");
 }
 
 
 char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr){
     fprintf(fptr, "Finding logical device...\n");
     LinkedList LDList = IedConnection_getServerDirectory(con, err, false);  // fetch all Logical devices
+    if(LDList == NULL){
+        return "";
+    }
 
     LinkedList currentDevice = LinkedList_getNext(LDList);  
     while (currentDevice != NULL){
@@ -99,4 +109,19 @@ char *findLogicalNode(LinkedList logicalNodes){
         return current->data;
     }
     return "";
+}
+
+void testLDList(IedConnection connection, IedClientError *err, const char *hostname){
+    LinkedList LDList = IedConnection_getServerDirectory(connection, err, false);  // fetch all Logical devices
+    if(LDList != NULL){
+        LinkedList currentDevice = LinkedList_getNext(LDList);  
+        while (currentDevice != NULL){
+            printf("LD: %s\n", currentDevice->data);
+            currentDevice = currentDevice->next;    // move down the linkedlist
+        }
+        printf("that was all\n");
+    }
+    else{
+        printf("It is null\n");
+    }
 }

@@ -29,4 +29,6 @@ char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr);
 
 char *findLogicalNode(LinkedList logicalNodes);
 
+void testLDList(IedConnection connection, IedClientError *err, const char *hostname);
+
 #endif

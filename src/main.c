@@ -63,7 +63,7 @@ int main(){
     }
     fprintf(fptr, "IP in range %s - %s\n\n", ipRange.hostMin, ipRange.hostMax);
 
-    /* schema for keeping track of which spreadsheet titles that match to witch data */
+    /* schema for keeping track of which spreadsheet titles that match to which data */
     spreadsheetColumnMapping schema[] = {
         {"Device", "IP"},
         {"IED Name", "name"},
@@ -84,16 +84,21 @@ int main(){
     IedConnection connection = IedConnection_create();  // create a connection
     IedClientError err;     // error reason
 
-    int tcpPort = 102;  // TCP port of device (IEC 16850 has port 102 as standard)
-    char concatenatedIP[16]; // buffer for holding IP address
+
+
     int IPCol = get_column_index("Device", schema, NUM_COLUMNS);
     if (IPCol == -1){
         fprintf(fptr, "Couldn't find spreadsheet title 'Device'.\n\n");
     }
 
-    for(size_t min = ipRange.minSuffix; (min <= ipRange.maxSuffix && min <= 254); min++){
+    int tcpPort = 102;  // TCP port of device (IEC 16850 has port 102 as standard)
+    char concatenatedIP[16]; // buffer for holding IP address
+
+    for(size_t min = ipRange.minSuffix; (min <= ipRange.maxSuffix && min <= 254); min++){   // iterate through all ip addresses in the range
+
         snprintf(concatenatedIP, sizeof(concatenatedIP), "%s%d", ipRange.IPPrefix, min);    // concatenate prefix and suffix to create whole IP
         fprintf(fptr, "Current device: %s\n", concatenatedIP);
+        printf("Current device: %s\n\n", concatenatedIP);
         
         int row = min - ipRange.minSuffix + 1;
         worksheetError = worksheet_write_string(worksheet, row, IPCol, concatenatedIP, NULL);  // write device IP address to spreadsheet
