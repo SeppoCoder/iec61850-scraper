@@ -8,6 +8,7 @@ IP in range 127.0.0.2 - 127.0.0.1677721
 
 Initializing worksheet...
 
+Couldn't set column width, returned with error code 32767 (/).
 Current device: 127.0.0.2
 Pinging Device...
 Successfull ping

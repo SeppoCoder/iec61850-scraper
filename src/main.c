@@ -9,7 +9,7 @@
     -I/home/sebli/libiec61850/.install/include -I/home/sebli/libxlsxwriter/include -Iheaders/ -L/home/sebli/iec61850-scraper/libs -L. -liec61850 -lhal -lxlsxwriter \
     -lzs -liphlpapi -lws2_32 -lbcrypt -lraylib -lgdi32 -lwinmm -static -static-libgcc -mwindows
 
-    Running on linux with wine: sudo wine src/main.exe 
+    Running on linux with wine: wine src/main.exe 
 */
 
 #include "gui.h"        // gui header for including GUI functions
@@ -71,6 +71,7 @@ int main(){
         {"Model", "model"},
         {"S/N", "serNum"},
         {"SW Version", "swRev"},
+        {"HW Version", "hwRev"},
         {"Ping", "ping"},
         {"MMS", "mms"}
     };
@@ -95,7 +96,6 @@ int main(){
     char concatenatedIP[16]; // buffer for holding IP address
 
     for(size_t min = ipRange.minSuffix; (min <= ipRange.maxSuffix && min <= 254); min++){   // iterate through all ip addresses in the range
-
         snprintf(concatenatedIP, sizeof(concatenatedIP), "%s%d", ipRange.IPPrefix, min);    // concatenate prefix and suffix to create whole IP
         fprintf(fptr, "Current device: %s\n", concatenatedIP);
         printf("Current device: %s\n\n", concatenatedIP);

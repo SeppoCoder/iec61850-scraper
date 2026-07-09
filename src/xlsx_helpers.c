@@ -13,6 +13,12 @@ int get_column_index(const char* targetTitle, spreadsheetColumnMapping schema[],
 
 void initWorksheet(lxw_worksheet *worksheet, lxw_error worksheetError, FILE *fptr, spreadsheetColumnMapping schema[], int numColumns){
     fprintf(fptr, "Initializing worksheet...\n\n");
+    
+    worksheetError = worksheet_set_column(worksheet, 0, numColumns - 1, 20, NULL);
+    if(worksheetError != LXW_NO_ERROR){
+            fprintf(fptr, "Couldn't set column width, returned with error code %d (%c).\n", worksheetError, lxw_strerror(worksheetError));
+    }
+
     for(size_t i = 0; i < numColumns; i++){
         worksheetError = worksheet_write_string(worksheet, 0, i, schema[i].title, NULL);
         if(worksheetError != LXW_NO_ERROR){

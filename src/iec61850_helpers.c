@@ -9,6 +9,12 @@ bool canConnectToIED(IedConnection connection, IedClientError *err, const char *
     IedConnection_connect(connection, err, deviceIP, tcpPort);     // connect to physical device using the connection above
 
     if (*err == IED_ERROR_OK){
+        IedConnection_getDeviceModelFromServer(connection, err);   // update device model buffer
+        if (*err != IED_ERROR_OK){
+            fprintf(fptr, "Couldn't buffer device data!\n");
+            printf("Couldn't buffer device data!\n");
+        }
+
         worksheetError = worksheet_write_string(worksheet, row, MMSCol, "ja", NULL); // successfull connect
         if (worksheetError != LXW_NO_ERROR){
             fprintf(fptr, "Couldn't write to worksheet, returned with error code %d (%c).\n", worksheetError, lxw_strerror(worksheetError));
@@ -30,7 +36,7 @@ bool canConnectToIED(IedConnection connection, IedClientError *err, const char *
 
 
 void processDeviceData(IedConnection con, IedClientError *err, const char *deviceName, const char *nodeName, lxw_worksheet *worksheet, int row, lxw_error worksheetError, FILE *fptr){
-    const char *dataAttributes[] = {"name", "vendor", "model", "serNum", "swRev"};
+    const char *dataAttributes[] = {"name", "vendor", "model", "serNum", "swRev", "hwRev"};
     char daRef[50];     // create buffer for copy and modification of attribute path
 
     /* iterate through all data attributes*/
@@ -70,7 +76,7 @@ char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr){
 
     LinkedList currentDevice = LinkedList_getNext(LDList);  
     while (currentDevice != NULL){
-        if(strstr(currentDevice->data, "LD0") != NULL){     // looking for device which includes substring "LD0"
+        if(strstr(currentDevice->data, "LD0") != NULL || strstr(currentDevice->data, "Application") != NULL){     // looking for device which includes substring "LD0"
             fprintf(fptr, "Found device %s\n\n", currentDevice->data);
             return currentDevice->data;
         }
@@ -116,12 +122,8 @@ void testLDList(IedConnection connection, IedClientError *err, const char *hostn
     if(LDList != NULL){
         LinkedList currentDevice = LinkedList_getNext(LDList);  
         while (currentDevice != NULL){
-            printf("LD: %s\n", currentDevice->data);
+            printf("    LD: %s\n", currentDevice->data);
             currentDevice = currentDevice->next;    // move down the linkedlist
         }
-        printf("that was all\n");
-    }
-    else{
-        printf("It is null\n");
     }
 }
