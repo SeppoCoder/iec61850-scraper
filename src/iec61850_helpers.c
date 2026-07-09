@@ -35,57 +35,95 @@ bool canConnectToIED(IedConnection connection, IedClientError *err, const char *
 }
 
 
-void processDeviceData(IedConnection con, IedClientError *err, const char *deviceName, const char *nodeName, lxw_worksheet *worksheet, int row, lxw_error worksheetError, FILE *fptr){
-    const char *dataAttributes[] = {"name", "vendor", "model", "serNum", "swRev", "hwRev"};
-    char daRef[50];     // create buffer for copy and modification of attribute path
+void processDeviceData(IedConnection con, IedClientError *err, const char *deviceName, const char *nodeName, dataAttribute DAs[], int DASize, lxw_worksheet *worksheet, int row, lxw_error worksheetError, FILE *fptr){
+    char daRef[64];     // create buffer for copy and modification of attribute path
+    bool tryAgain;
+    const char *strVal; 
 
     /* iterate through all data attributes*/
-    for(size_t daIndex = 0; daIndex < sizeof(dataAttributes) / sizeof(dataAttributes[0]); daIndex++){
-        snprintf(daRef, sizeof(daRef), "%s/%s.%s.%s", deviceName, nodeName, "PhyNam", dataAttributes[daIndex]);     //concatenate the different paths to a full path
+    for(size_t i = 0; i < DASize; i++){
+        tryAgain = true;
+        snprintf(daRef, sizeof(daRef), "%s/%s.%s.%s", deviceName, nodeName, DAs[i].DO, DAs[i].DA);     //concatenate the different paths to a full path
         MmsValue *value = IedConnection_readObject(con, err, daRef, IEC61850_FC_DC);    // read object at path
         if(value != NULL){
-            const char *strVal = MmsValue_toString(value);
+            strVal = MmsValue_toString(value);
             if(strVal != NULL && strVal[0] != '\0'){
-                worksheetError = worksheet_write_string(worksheet, row, daIndex + 1, strVal, NULL);  // write to worksheet if the string isn't empty
+                tryAgain = false;
+                worksheetError = worksheet_write_string(worksheet, row, DAs[i].excelCol, strVal, NULL);  // write to worksheet if the string isn't empty
                 if (worksheetError != LXW_NO_ERROR){
                     fprintf(fptr, "Couldn't write to worksheet, returned with error code %d (%c).\n", worksheetError, lxw_strerror(worksheetError));
                 }
                 fprintf(fptr, "Successfull read from path: %s\n", daRef);
                 printf("Successfull read from path: %s\n", daRef);
-            }else{
-                fprintf(fptr, "Error reading from path: %s\n", daRef);
-                printf("Error reading from path: %s\n", daRef);
             }
         }
         else{
             fprintf(fptr, "Error reading from IED!\n REASON: %s.\n", IedClientError_toString(*err));
             printf("Error reading from IED!\n REASON: %s.\n", IedClientError_toString(*err));
+            tryAgain = false;   // no idea changing FC, likely failed due to other reasons.
         }
+
+        /* try to read other functional constraint if above failed */
+        if (tryAgain){
+            value = IedConnection_readObject(con, err, daRef, IEC61850_FC_EX);
+            if(value != NULL){
+                strVal = MmsValue_toString(value);
+                if(strVal != NULL && strVal[0] != '\0'){
+                    worksheetError = worksheet_write_string(worksheet, row, DAs[i].excelCol, strVal, NULL);  // write to worksheet if the string isn't empty
+                    if (worksheetError != LXW_NO_ERROR){
+                        fprintf(fptr, "Couldn't write to worksheet, returned with error code %d (%c).\n", worksheetError, lxw_strerror(worksheetError));
+                    }
+                    fprintf(fptr, "Successfull read from path: %s\n", daRef);
+                    printf("Successfull read from path: %s\n", daRef);
+                }else{
+                    fprintf(fptr, "Error reading from path: %s\n", daRef);
+                    printf("Error reading from path: %s\n", daRef);
+                }
+            }else{
+                fprintf(fptr, "Error reading from IED!\n REASON: %s.\n", IedClientError_toString(*err));
+                printf("Error reading from IED!\n REASON: %s.\n", IedClientError_toString(*err));
+            }
+        }
+
         MmsValue_delete(value);
     }
     printf("\n");
 }
 
 
-char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr){
+char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr, char *iedName){
     fprintf(fptr, "Finding logical device...\n");
+    const char *LDs[] = {"LD0", "Application"};
+    const int LDSize = sizeof(LDs) / sizeof(LDs[0]);
+    char *pos;
+
     LinkedList LDList = IedConnection_getServerDirectory(con, err, false);  // fetch all Logical devices
-    if(LDList == NULL){
+    if(!LDList){
+        fprintf(fptr, "No logical devices found!\n\n");
         return "";
     }
 
     LinkedList currentDevice = LinkedList_getNext(LDList);  
-    while (currentDevice != NULL){
-        if(strstr(currentDevice->data, "LD0") != NULL || strstr(currentDevice->data, "Application") != NULL){     // looking for device which includes substring "LD0"
-            fprintf(fptr, "Found device %s\n\n", currentDevice->data);
-            return currentDevice->data;
-        }
+    while (currentDevice){
 
+        for (int i = 0; i < LDSize; i++){
+            if(pos = strstr(currentDevice->data, LDs[i])){     // looking for device which includes substring
+                fprintf(fptr, "Found device %s\n\n", currentDevice->data);
+
+                int iedNameLength = strlen(currentDevice->data) - strlen(pos);   // calculate length of Ied name
+                if (iedNameLength > 0){
+                    strncpy(iedName, currentDevice->data, iedNameLength);   // take out IED name via copying 'iedNameLength' chars to iedName
+                    iedName[iedNameLength] = '\0';  
+                }
+                return currentDevice->data;
+            }    
+        }
+        
         currentDevice = currentDevice->next;    // move down the linkedlist
     }
 
     LinkedList firstDevice = LinkedList_getNext(LDList);
-    if (firstDevice != NULL) {
+    if (firstDevice) {
         fprintf(fptr, "Couldn't find logical device including 'LD0'. Defaulting to first logical device found (%s).\n\n", firstDevice->data);
         return firstDevice->data;
     }
@@ -95,23 +133,31 @@ char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr){
 } 
 
 
-char *findLogicalNode(LinkedList logicalNodes){
+char *findLogicalNode(LinkedList logicalNodes, const char *priorityName){
     char *LNsToSearch[] = {"LPHD0", "LPHD1", "LLN0"};
 
     LinkedList current = LinkedList_getNext(logicalNodes);
 
-    for (size_t i = 0; i < sizeof(LNsToSearch) / sizeof(LNsToSearch[0]); i++){
-        LinkedList temp = current;  // copy 
+    LinkedList currentCopy1 = current;  // copy 
+    while (currentCopy1){
+        if (strcmp(priorityName, currentCopy1->data) == 0) {
+            return currentCopy1->data; 
+        }   
+        currentCopy1 = currentCopy1->next;
+    }
 
-        while (temp != NULL){
-            if (strcmp(LNsToSearch[i], temp->data) == 0) {
-                return LNsToSearch[i]; 
+    for (size_t i = 0; i < sizeof(LNsToSearch) / sizeof(LNsToSearch[0]); i++){
+        LinkedList currentCopy2 = current;  // copy 
+
+        while (currentCopy2){
+            if (strcmp(LNsToSearch[i], currentCopy2->data) == 0) {
+                return currentCopy2->data; 
             }   
-            temp = temp->next;
+            currentCopy2 = currentCopy2->next;
         }
     }
     
-    if(current != NULL){
+    if(current){
         return current->data;
     }
     return "";

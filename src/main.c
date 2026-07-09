@@ -66,14 +66,16 @@ int main(){
     /* schema for keeping track of which spreadsheet titles that match to which data */
     spreadsheetColumnMapping schema[] = {
         {"Device", "IP"},
+        {"Ping", "ping"},
+        {"MMS", "mms"},
         {"IED Name", "name"},
         {"Vendor", "vendor"},
         {"Model", "model"},
         {"S/N", "serNum"},
         {"SW Version", "swRev"},
         {"HW Version", "hwRev"},
-        {"Ping", "ping"},
-        {"MMS", "mms"}
+        {"Config Revision", "configRev"},
+        {"IEC61850 Version", "ldNs"}
     };
     const int NUM_COLUMNS = sizeof(schema) / sizeof(schema[0]); 
 
@@ -92,18 +94,25 @@ int main(){
         fprintf(fptr, "Couldn't find spreadsheet title 'Device'.\n\n");
     }
 
+    int nameCol = get_column_index("IED Name", schema, NUM_COLUMNS);
+    if (nameCol == -1){
+        fprintf(fptr, "Couldn't find spreadsheet title 'IED Name'.\n\n");
+    }
+
     int tcpPort = 102;  // TCP port of device (IEC 16850 has port 102 as standard)
-    char concatenatedIP[16]; // buffer for holding IP address
 
     for(size_t min = ipRange.minSuffix; (min <= ipRange.maxSuffix && min <= 254); min++){   // iterate through all ip addresses in the range
+        char concatenatedIP[16]; // buffer for holding IP address
         snprintf(concatenatedIP, sizeof(concatenatedIP), "%s%d", ipRange.IPPrefix, min);    // concatenate prefix and suffix to create whole IP
+        fprintf(fptr, "-------------------------------------\n");
         fprintf(fptr, "Current device: %s\n", concatenatedIP);
+        printf("-------------------------------------\n");
         printf("Current device: %s\n\n", concatenatedIP);
         
         int row = min - ipRange.minSuffix + 1;
         worksheetError = worksheet_write_string(worksheet, row, IPCol, concatenatedIP, NULL);  // write device IP address to spreadsheet
         if(worksheetError != LXW_NO_ERROR){
-            fprintf(fptr, "Couldn't write to worksheet, returned with error code %d (%c)\n", worksheetError, lxw_strerror(worksheetError));
+            fprintf(fptr, "Couldn't write to worksheet, returned with error code %d (%s)\n", worksheetError, lxw_strerror(worksheetError));
         }
 
         int pingCol = get_column_index("Ping", schema, NUM_COLUMNS);
@@ -120,11 +129,39 @@ int main(){
             
             bool canConnect = canConnectToIED(connection, &err, concatenatedIP, tcpPort, worksheet, row, worksheetError, fptr, MMSCol);    // connect to IED
             if(canConnect){
-                char *deviceName = get_LD_name(connection, &err, fptr);  // fetch name of logical device
+                char iedName[64];
+                char *deviceName = get_LD_name(connection, &err, fptr, iedName);  // fetch name of logical device
+                if (iedName){
+                    worksheetError = worksheet_write_string(worksheet, row, nameCol, iedName, NULL);  // write device IP address to spreadsheet
+                    if(worksheetError != LXW_NO_ERROR){
+                        fprintf(fptr, "Couldn't write to worksheet, returned with error code %d (%s)\n", worksheetError, lxw_strerror(worksheetError));
+                    }
+                }
+
                 LinkedList logicalNodes = IedConnection_getLogicalDeviceDirectory(connection, &err, deviceName);    // fetch all logical nodes
-                char *logicalNode = findLogicalNode(logicalNodes);    // find correct logical node (LPHD0, LPHD1, LLN0)
+
+                char *logicalNode = findLogicalNode(logicalNodes, "LPHD0");    // find correct logical node (LPHD0, LPHD1, LLN0)
                 fprintf(fptr, "found logicalNode: %s\n\n", logicalNode);
-                processDeviceData(connection, &err, deviceName, logicalNode, worksheet, row, worksheetError ,fptr);   // read device data and write it to the worksheet
+
+                dataAttribute DAs1[] = {
+                    {"vendor", "PhyNam", 4},
+                    {"model", "PhyNam", 5},
+                    {"serNum", "PhyNam", 6},
+                    {"swRev", "PhyNam", 7},
+                    {"hwRev", "PhyNam", 8}
+                };
+                int DASize = sizeof(DAs1) / sizeof(DAs1[0]);
+                processDeviceData(connection, &err, deviceName, logicalNode, DAs1, DASize, worksheet, row, worksheetError ,fptr);   // read device data and write it to the worksheet
+
+                logicalNode = findLogicalNode(logicalNodes, "LLN0");    // find correct logical node (LPHD0, LPHD1, LLN0)
+                fprintf(fptr, "found logicalNode: %s\n\n", logicalNode);
+
+                dataAttribute DAs2[] = {
+                    {"configRev", "NamPlt", 9},
+                    {"ldNs", "NamPlt", 10}
+                };
+                DASize = sizeof(DAs2) / sizeof(DAs2[0]);
+                processDeviceData(connection, &err, deviceName, logicalNode, DAs2, DASize, worksheet, row, worksheetError ,fptr);   // read device data and write it to the worksheet
             }
         }
 
@@ -134,9 +171,10 @@ int main(){
 
 cleanup:
     IedConnection_destroy(connection);
+
     worksheetError = workbook_close(workbook);   // close and save workbook
     if (worksheetError != LXW_NO_ERROR){
-        fprintf(fptr, "Couldn't close worksheet, returned with error code %d (%c)\n", worksheetError, lxw_strerror(worksheetError));
+        fprintf(fptr, "Couldn't close worksheet, returned with error code %d (%s)\n", worksheetError, lxw_strerror(worksheetError));
     }else{
         fprintf(fptr, "Wrote results to %s\n", workbookName);
     }
