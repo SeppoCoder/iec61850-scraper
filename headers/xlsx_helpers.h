@@ -1,6 +1,8 @@
 #ifndef XLSX_HELPERS_H
 #define XLSX_HELPERS_H
 
+#include "usefullmacros.h"
+
 #include "xlsxwriter.h"
 
 // struct for mapping spreadsheet title and data attribute

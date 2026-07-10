@@ -12,10 +12,13 @@
     Running on linux with wine: wine src/main.exe 
 */
 
+#include "usefullmacros.h"
+
 #include "gui.h"        // gui header for including GUI functions
 #include "networking.h"     // networking header including functions for networking 
 #include "iec61850_helpers.h"   // helper functions for iec61850 library
 #include "xlsx_helpers.h"   // helper functions for xlsx library
+#include "userpath_helpers.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -29,9 +32,25 @@ int main(){
     FILE *fptr; 
     fptr = fopen("stationslogg.log", "w"); // create log file
 
+
+    char *fileContents; // dynamically allocated inside readFileToString
+    int bytesRead = readFileToString("userPaths.json", &fileContents);
+    if(bytesRead < 0){
+        LOG(fptr, "Error while reading user json\n");
+        goto exit_wo_cleanup;
+    }
+
+    jsmn_parser parser;
+    jsmntok_t *tokens;
+    int readTokens = initJsmn(&parser, &tokens, fileContents, bytesRead, fptr);
+    if (readTokens < 0){
+        LOG(fptr, "Error while initializing JSON.\n");
+        goto exit_wo_cleanup;
+    }
+
     int networkSuccess = initNetwork();
     if(networkSuccess != 0){
-        fprintf(fptr, "WSAStartup failed.\n\n");
+        LOG(fptr, "WSAStartup failed.\n\n");
         exitCode = -1;
         goto exit_wo_cleanup;
     }    
@@ -39,12 +58,12 @@ int main(){
     // try to find station network
     NetworkInfo netInfo = findMatchingNetwork(fptr); 
     if(!netInfo.success){
-        fprintf(fptr, "Couldn't fetch info from predefined networks, asking user.\n");
+        LOG(fptr, "Couldn't fetch info from predefined networks, asking user.\n");
 
         char *pointerToSSIDs[10] = { NULL };
         int fetchedNetworks = fetchAvailableNetworks(pointerToSSIDs);
         if(fetchedNetworks < 0){
-            fprintf(fptr, "couldn't find any suitable network!\n\n");
+            LOG(fptr, "couldn't find any suitable network!\n\n");
             exitCode = -1;
             goto exit_wo_cleanup;
         }
@@ -57,11 +76,11 @@ int main(){
 
     IPRange ipRange = getIPRange(&netInfo, fptr); // calculate ranges of IP addresses
     if(ipRange.success == 0){
-        fprintf(fptr, "Couldn't calculate IP range!\n\n");
+        LOG(fptr, "Couldn't calculate IP range!\n\n");
         exitCode = -1;
         goto exit_wo_cleanup;
     }
-    fprintf(fptr, "IP in range %s - %s\n\n", ipRange.hostMin, ipRange.hostMax);
+    LOG(fptr, "IP in range %s - %s\n\n", ipRange.hostMin, ipRange.hostMax);
 
     /* schema for keeping track of which spreadsheet titles that match to which data */
     spreadsheetColumnMapping schema[] = {
@@ -91,57 +110,56 @@ int main(){
 
     int IPCol = get_column_index("Device", schema, NUM_COLUMNS);
     if (IPCol == -1){
-        fprintf(fptr, "Couldn't find spreadsheet title 'Device'.\n\n");
+        LOG(fptr, "Couldn't find spreadsheet title 'Device'.\n\n");
     }
 
     int nameCol = get_column_index("IED Name", schema, NUM_COLUMNS);
     if (nameCol == -1){
-        fprintf(fptr, "Couldn't find spreadsheet title 'IED Name'.\n\n");
+        LOG(fptr, "Couldn't find spreadsheet title 'IED Name'.\n\n");
     }
 
     int tcpPort = 102;  // TCP port of device (IEC 16850 has port 102 as standard)
+    parseUserPaths(&parser, tokens, fileContents, bytesRead, readTokens, fptr, tcpPort, ipRange.minSuffix, worksheet, NUM_COLUMNS);
 
     for(size_t min = ipRange.minSuffix; (min <= ipRange.maxSuffix && min <= 254); min++){   // iterate through all ip addresses in the range
         char concatenatedIP[16]; // buffer for holding IP address
         snprintf(concatenatedIP, sizeof(concatenatedIP), "%s%d", ipRange.IPPrefix, min);    // concatenate prefix and suffix to create whole IP
-        fprintf(fptr, "-------------------------------------\n");
-        fprintf(fptr, "Current device: %s\n", concatenatedIP);
-        printf("-------------------------------------\n");
-        printf("Current device: %s\n\n", concatenatedIP);
+        LOG(fptr, "-------------------------------------\n");
+        LOG(fptr, "Current device: %s\n", concatenatedIP);
         
         int row = min - ipRange.minSuffix + 1;
         worksheetError = worksheet_write_string(worksheet, row, IPCol, concatenatedIP, NULL);  // write device IP address to spreadsheet
         if(worksheetError != LXW_NO_ERROR){
-            fprintf(fptr, "Couldn't write to worksheet, returned with error code %d (%s)\n", worksheetError, lxw_strerror(worksheetError));
+            LOG(fptr, "Couldn't write to worksheet, returned with error code %d (%s)\n", worksheetError, lxw_strerror(worksheetError));
         }
 
         int pingCol = get_column_index("Ping", schema, NUM_COLUMNS);
         if (pingCol == -1){
-            fprintf(fptr, "Couldn't find spreadsheet title 'Ping'.\n");
+            LOG(fptr, "Couldn't find spreadsheet title 'Ping'.\n");
         }
 
         bool canPing = checkForPingAnswer(concatenatedIP, worksheet, row, worksheetError, fptr, pingCol);   // check if device answers to ping
         if (canPing){
             int MMSCol = get_column_index("MMS", schema, NUM_COLUMNS);
             if (MMSCol == -1){
-                fprintf(fptr, "Couldn't find spreadsheet title 'MMS'.\n");
+                LOG(fptr, "Couldn't find spreadsheet title 'MMS'.\n");
             }
             
             bool canConnect = canConnectToIED(connection, &err, concatenatedIP, tcpPort, worksheet, row, worksheetError, fptr, MMSCol);    // connect to IED
             if(canConnect){
-                char iedName[64];
+                char iedName[128];
                 char *deviceName = get_LD_name(connection, &err, fptr, iedName);  // fetch name of logical device
                 if (iedName){
                     worksheetError = worksheet_write_string(worksheet, row, nameCol, iedName, NULL);  // write device IP address to spreadsheet
                     if(worksheetError != LXW_NO_ERROR){
-                        fprintf(fptr, "Couldn't write to worksheet, returned with error code %d (%s)\n", worksheetError, lxw_strerror(worksheetError));
+                        LOG(fptr, "Couldn't write to worksheet, returned with error code %d (%s)\n", worksheetError, lxw_strerror(worksheetError));
                     }
                 }
 
                 LinkedList logicalNodes = IedConnection_getLogicalDeviceDirectory(connection, &err, deviceName);    // fetch all logical nodes
 
                 char *logicalNode = findLogicalNode(logicalNodes, "LPHD0");    // find correct logical node (LPHD0, LPHD1, LLN0)
-                fprintf(fptr, "found logicalNode: %s\n\n", logicalNode);
+                LOG(fptr, "found logicalNode: %s\n", logicalNode);
 
                 dataAttribute DAs1[] = {
                     {"vendor", "PhyNam", 4},
@@ -154,7 +172,7 @@ int main(){
                 processDeviceData(connection, &err, deviceName, logicalNode, DAs1, DASize, worksheet, row, worksheetError ,fptr);   // read device data and write it to the worksheet
 
                 logicalNode = findLogicalNode(logicalNodes, "LLN0");    // find correct logical node (LPHD0, LPHD1, LLN0)
-                fprintf(fptr, "found logicalNode: %s\n\n", logicalNode);
+                LOG(fptr, "\nfound logicalNode: %s\n", logicalNode);
 
                 dataAttribute DAs2[] = {
                     {"configRev", "NamPlt", 9},
@@ -165,7 +183,7 @@ int main(){
             }
         }
 
-        fprintf(fptr, "\n");
+        LOG(fptr, "\n");
         IedConnection_close(connection);
     } 
 
@@ -174,16 +192,16 @@ cleanup:
 
     worksheetError = workbook_close(workbook);   // close and save workbook
     if (worksheetError != LXW_NO_ERROR){
-        fprintf(fptr, "Couldn't close worksheet, returned with error code %d (%s)\n", worksheetError, lxw_strerror(worksheetError));
+        LOG(fptr, "Couldn't close worksheet, returned with error code %d (%s)\n", worksheetError, lxw_strerror(worksheetError));
     }else{
-        fprintf(fptr, "Wrote results to %s\n", workbookName);
+        LOG(fptr, "Wrote results to %s\n", workbookName);
     }
 
-    fprintf(fptr, "IedConnection destroyed!\n");
-    fprintf(fptr, "Exiting with exit code %d\n", exitCode);
+    LOG(fptr, "IedConnection destroyed!\n");
+    LOG(fptr, "Exiting with exit code %d\n", exitCode);
     return exitCode;
 
 exit_wo_cleanup:
-    fprintf(fptr, "Exiting with exit code %d\n", exitCode);
+    LOG(fptr, "Exiting with exit code %d\n", exitCode);
     return exitCode;
 }   

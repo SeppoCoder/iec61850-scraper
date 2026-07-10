@@ -16,6 +16,8 @@
 // 5. Restore the original DEPRECATED macro so xlsxwriter stays happy
 #pragma pop_macro("DEPRECATED")
 
+#include "usefullmacros.h"
+
 #include "xlsx_helpers.h"
 
 typedef struct {
@@ -27,14 +29,17 @@ typedef struct {
 /* Checks if we can connect to the given IP via IEC61850 MMS, and writes the result to the worksheet. */
 bool canConnectToIED(IedConnection connection, IedClientError *err, const char *deviceIP, int tcpPort, lxw_worksheet *worksheet, int row, lxw_error worksheetError, FILE *fptr, int MMSCol);
 
-/* Tries to find the given global data attributes and write their data to the worksheet. */
+/* Tries to write an MMS value to the spreadsheet. */
+bool writeDeviceData(MmsValue *value, const char *daRef, lxw_worksheet *worksheet, int col, int row, FILE *fptr, IedClientError *err, bool firstIteration);
+
+/* Gets user provided data attribute and writes it to the spreadsheet */
+void processUserDevice(const char *ipAddr, int tcpPort, const char *path, int ipMinHost, lxw_worksheet *worksheet, int excelCol, FILE *fptr);
+
+/* Tries to find and retrieve the given data attributes  */
 void processDeviceData(IedConnection con, IedClientError *err, const char *deviceName, const char *nodeName, dataAttribute DAs[], int DASize, lxw_worksheet *worksheet, int row, lxw_error worksheetError, FILE *fptr);
 
 /* Tries to find logical device 'LD0', if not found it return the first logical device. returns NULL if no devices found. */
 char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr, char *iedName);
 
 char *findLogicalNode(LinkedList logicalNodes, const char *priorityName);
-
-void testLDList(IedConnection connection, IedClientError *err, const char *hostname);
-
 #endif

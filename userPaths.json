@@ -1,0 +1,19 @@
+{
+    "userDefined": [
+        {
+        "Title" :  "MyDescription", 
+        "Path" : "simpleIOGenericIO/LLN0.NamPlt.d", 
+        "IpAddress" : "127.0.0.8"
+        },
+        {
+        "Title" :  "MyVendor", 
+        "Path" : "simpleIOGenericIO/LLN0.NamPlt.vendor", 
+        "IpAddress" : "127.0.0.13"
+        },
+        {
+        "Title" :  "MySwRev", 
+        "Path" : "simpleIOGenericIO/LLN0.NamPlt.swRev", 
+        "IpAddress" : "127.0.0.11"
+        }
+    ]
+}

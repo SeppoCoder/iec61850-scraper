@@ -2,10 +2,11 @@
 #define NETWORKING_H
 
 #include "xlsx_helpers.h"
+#include "usefullmacros.h"
 
 /* Define a struct to hold the network data */
 typedef struct {
-    char  hostname[32];
+    char hostname[32];
     char ip[16];
     uint8_t subnet_mask;
     int success; 

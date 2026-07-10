@@ -24,6 +24,7 @@ int initNetwork(void){
 
 NetworkInfo getInfoFromNetwork(const wchar_t *friendlyName, FILE *fptr){
     fwprintf(fptr, L"Fetching network info from '%ls'\n", friendlyName);
+    wprintf(L"Fetching network info from '%ls'\n", friendlyName);
     NetworkInfo info = {0}; // initialize "empty" struct
 
     // Setup variables for GetAdaptersAddresses
@@ -36,7 +37,7 @@ NetworkInfo getInfoFromNetwork(const wchar_t *friendlyName, FILE *fptr){
     if (GetAdaptersAddresses(family, flags, NULL, pAddresses, &outBufLen) == ERROR_BUFFER_OVERFLOW) {
         pAddresses = (PIP_ADAPTER_ADDRESSES)malloc(outBufLen);
         if (pAddresses == NULL) {
-            fprintf(fptr, "Couldn't allocate memory for network network buffer.\n");
+            LOG(fptr, "Couldn't allocate memory for network network buffer.\n");
             WSACleanup();
             info.success = 0;
             return info;
@@ -70,7 +71,7 @@ NetworkInfo getInfoFromNetwork(const wchar_t *friendlyName, FILE *fptr){
             pCurrAddresses = pCurrAddresses->Next;  // continue stepping through the linked list
         }
     } else {
-        fprintf(fptr, "Call to GetAdaptersAddresses failed.\n");
+        LOG(fptr, "Call to GetAdaptersAddresses failed.\n");
         info.success = 0;
     }
 
@@ -84,12 +85,12 @@ NetworkInfo getInfoFromNetwork(const wchar_t *friendlyName, FILE *fptr){
 
 
 IPRange getIPRange(NetworkInfo *netInfo, FILE *fptr){
-    fprintf(fptr, "Calculating IP Range...\n");
+    LOG(fptr, "Calculating IP Range...\n");
     IPRange range = {0};
     range.success = 0;  // init to fail
 
     if(netInfo->subnet_mask > 32){ 
-        fprintf(fptr, "Subnet is to large.\n");
+        LOG(fptr, "Subnet is to large.\n");
         return range; 
     }   
     
@@ -98,21 +99,21 @@ IPRange getIPRange(NetworkInfo *netInfo, FILE *fptr){
     char *lastDot = strrchr(netInfo->ip, '.'); // find the last dot in the ip-address
     char *lastHostIP = (lastDot == NULL) ? NULL : lastDot + 1;  // find the last characters in ip-address
     if(lastHostIP == NULL){ 
-        fprintf(fptr, "Couldn't parse IP address.\n");
+        LOG(fptr, "Couldn't parse IP address.\n");
         return range; 
     }
 
     int lastHostToi = atoi(lastHostIP);     // convert to integer for use in subnet index calculation
     if(lastHostToi == 0){ 
-        fprintf(fptr, "Couldn't convert IP address back to integer, IP is probaly malformed in some way.\n");  
+        LOG(fptr, "Couldn't convert IP address back to integer, IP is probaly malformed in some way.\n");  
         return range; 
     } 
 
     unsigned subnetIndex = floor(lastHostToi / (usableIPAddresses + 2)); // calculate in which subnet our host is in
     range.minSuffix = 2 + subnetIndex * (usableIPAddresses + 2);        // calculate min host
-    range.maxSuffix = range.minSuffix + usableIPAddresses - 1;    // calculate max host
+    range.maxSuffix = range.minSuffix + usableIPAddresses - 2;    // calculate max host
     if(range.minSuffix > range.maxSuffix) { 
-        fprintf(fptr, "Maximum host in IP address is smaller than minimum host, subnet mask is probably not valid.\n");
+        LOG(fptr, "Maximum host in IP address is smaller than minimum host, subnet mask is probably not valid.\n");
         return range;
     }
 
@@ -123,12 +124,12 @@ IPRange getIPRange(NetworkInfo *netInfo, FILE *fptr){
 
     int assignMinChars = snprintf(range.hostMin, sizeof(range.hostMin), "%s%d", range.IPPrefix, range.minSuffix);  // concatenate suffix and min host
     if (assignMinChars < 0){ 
-        fprintf(fptr, "Couldn't concatenate IP address, IP address is probably malformed.\n");
+        LOG(fptr, "Couldn't concatenate IP address, IP address is probably malformed.\n");
         return range; 
     }   
     int assignMaxChars = snprintf(range.hostMax, sizeof(range.hostMax), "%s%d", range.IPPrefix, range.maxSuffix);  // concatenate suffix and max host
     if (assignMaxChars < 0){ 
-        fprintf(fptr, "Couldn't concatenate IP address, IP address is probably malformed.\n");
+        LOG(fptr, "Couldn't concatenate IP address, IP address is probably malformed.\n");
         return range; 
     }
 
@@ -138,21 +139,21 @@ IPRange getIPRange(NetworkInfo *netInfo, FILE *fptr){
 
 
 NetworkInfo findMatchingNetwork(FILE *fptr){
-    fprintf(fptr, "Finding available network...\n");
+    LOG(fptr, "Finding available network...\n");
     NetworkInfo netInfo;
 
     netInfo = getInfoFromNetwork(L"stationsbuss", fptr);
     if(netInfo.success){
-        fprintf(fptr, "found network '%s' with IP: %s, and netmask: %d\n\n", netInfo.hostname, netInfo.ip, netInfo.subnet_mask);
+        LOG(fptr, "found network '%s' with IP: %s, and netmask: %d\n\n", netInfo.hostname, netInfo.ip, netInfo.subnet_mask);
     } 
 
-    fprintf(fptr, "\n");
+    LOG(fptr, "\n");
     return netInfo;
 }  
 
 
 bool checkForPingAnswer(const char *ipAddress, lxw_worksheet *worksheet, int row, lxw_error worksheetError, FILE *fptr, int pingCol){
-    fprintf(fptr, "Pinging Device...\n");
+    LOG(fptr, "Pinging Device...\n");
 
     HANDLE hIcmpFile;
     unsigned long ipaddr = INADDR_NONE;
@@ -163,19 +164,19 @@ bool checkForPingAnswer(const char *ipAddress, lxw_worksheet *worksheet, int row
     
     worksheetError = worksheet_write_string(worksheet, row, pingCol, "nej", NULL);   // initialize to unsuccessfull ping in spreadsheet   
     if (worksheetError != LXW_NO_ERROR){
-        fprintf(fptr, "Couldn't write to worksheet, returned with error code %d (%c).\n", worksheetError, lxw_strerror(worksheetError));
+        LOG(fptr, "Couldn't write to worksheet, returned with error code %d (%c).\n", worksheetError, lxw_strerror(worksheetError));
     }
 
     ipaddr = inet_addr(ipAddress);  // convert ip to be able to send with ICMP
     if (ipaddr == INADDR_NONE) { 
-        fprintf(fptr, "Unable to convert IP address.\n\n");
+        LOG(fptr, "Unable to convert IP address.\n\n");
         return false; 
     }
 
     
     hIcmpFile = IcmpCreateFile();   // open handler for ICMP echo request
     if (hIcmpFile == INVALID_HANDLE_VALUE) { 
-        fprintf(fptr, "Couldn't create ICMP handler.\n\n");
+        LOG(fptr, "Couldn't create ICMP handler.\n\n");
         return false; 
     } 
 
@@ -183,7 +184,7 @@ bool checkForPingAnswer(const char *ipAddress, lxw_worksheet *worksheet, int row
     ReplySize = sizeof(ICMP_ECHO_REPLY) + sizeof(SendData);
     ReplyBuffer = (VOID*) malloc(ReplySize);    
     if (ReplyBuffer == NULL) { 
-        fprintf(fptr, "Couldn't allocate memory for reply buffer.\n\n");
+        LOG(fptr, "Couldn't allocate memory for reply buffer.\n\n");
         IcmpCloseHandle(hIcmpFile);
         return false; 
     }   
@@ -197,19 +198,19 @@ bool checkForPingAnswer(const char *ipAddress, lxw_worksheet *worksheet, int row
         PICMP_ECHO_REPLY pEchoReply = (PICMP_ECHO_REPLY)ReplyBuffer;
         if (pEchoReply->Status == 0) {
             returnStatus = true;
-            fprintf(fptr, "Successfull ping\n");
+            LOG(fptr, "Successfull ping\n");
             worksheetError = worksheet_write_string(worksheet, row, pingCol, "ja", NULL);  // ping sent successfully, update spreadsheet
             if (worksheetError != LXW_NO_ERROR){
-                fprintf(fptr, "Couldn't write to worksheet, returned with error code %d (%c)\n", worksheetError, lxw_strerror(worksheetError));
+                LOG(fptr, "Couldn't write to worksheet, returned with error code %d (%c)\n", worksheetError, lxw_strerror(worksheetError));
             }
         }else{
-            fprintf(fptr, "ICMP reply has unsuccessfull status code: %d\n", pEchoReply->Status);
+            LOG(fptr, "ICMP reply has unsuccessfull status code: %d\n", pEchoReply->Status);
         }
     }else{
-        fprintf(fptr, "No echo recieved, error code: %d\n", GetLastError());
+        LOG(fptr, "No echo recieved, error code: %d\n", GetLastError());
     }
 
-    fprintf(fptr, "\n");
+    LOG(fptr, "\n");
     IcmpCloseHandle(hIcmpFile);
     free(ReplyBuffer);
     
