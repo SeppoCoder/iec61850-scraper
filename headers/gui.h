@@ -1,7 +1,7 @@
 #ifndef GUI_H
 #define GUI_H
 
-#include "usefullmacros.h"
+#include "usefulmacros.h"
 
 
 #include <stdlib.h>

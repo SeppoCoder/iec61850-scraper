@@ -2,7 +2,7 @@
 #define NETWORKING_H
 
 #include "xlsx_helpers.h"
-#include "usefullmacros.h"
+#include "usefulmacros.h"
 
 /* Define a struct to hold the network data */
 typedef struct {

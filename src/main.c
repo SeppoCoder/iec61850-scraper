@@ -5,14 +5,14 @@
     Last modified: 2026-07-03
 
     ------------- Compiling and running the program -------------
-    Compiling on linux with mingw32: x86_64-w64-mingw32-gcc src/main.c src/iec61850_helpers.c src/xlsx_helpers.c src/networking.c src/gui.c -o src/main.exe \
-    -I/home/sebli/libiec61850/.install/include -I/home/sebli/libxlsxwriter/include -Iheaders/ -L/home/sebli/iec61850-scraper/libs -L. -liec61850 -lhal -lxlsxwriter \
-    -lzs -liphlpapi -lws2_32 -lbcrypt -lraylib -lgdi32 -lwinmm -static -static-libgcc -mwindows
+    Compiling on linux with mingw32: x86_64-w64-mingw32-gcc src/main.c src/iec61850_helpers.c src/xlsx_helpers.c src/networking.c src/gui.c src/userpath_helpers.c src/jsmn.c -o src/scraper8.exe \    
+    -I/home/sebli/libiec61850/.install/include -I/home/sebli/libxlsxwriter/include -Iheaders/ -L/home/sebli/iec61850-scraper/libs -L. -liec61850 -lhal -lxlsxwriter \    
+    -lzs -liphlpapi -lws2_32 -lbcrypt -lraylib -lgdi32 -lwinmm -static -static-libgcc
 
     Running on linux with wine: wine src/main.exe 
 */
 
-#include "usefullmacros.h"
+#include "usefulmacros.h"
 
 #include "gui.h"        // gui header for including GUI functions
 #include "networking.h"     // networking header including functions for networking 
@@ -53,7 +53,7 @@ int main(){
         LOG(fptr, "WSAStartup failed.\n\n");
         exitCode = -1;
         goto exit_wo_cleanup;
-    }    
+    }
 
     // try to find station network
     NetworkInfo netInfo = findMatchingNetwork(fptr); 
@@ -82,44 +82,37 @@ int main(){
     }
     LOG(fptr, "IP in range %s - %s\n\n", ipRange.hostMin, ipRange.hostMax);
 
-    /* schema for keeping track of which spreadsheet titles that match to which data */
-    spreadsheetColumnMapping schema[] = {
-        {"Device", "IP"},
-        {"Ping", "ping"},
-        {"MMS", "mms"},
-        {"IED Name", "name"},
-        {"Vendor", "vendor"},
-        {"Model", "model"},
-        {"S/N", "serNum"},
-        {"SW Version", "swRev"},
-        {"HW Version", "hwRev"},
-        {"Config Revision", "configRev"},
-        {"IEC61850 Version", "ldNs"}
-    };
-    const int NUM_COLUMNS = sizeof(schema) / sizeof(schema[0]); 
+    const char *predefinedSpreadsheetColumns[] = {"Device", "Ping", "MMS", "IED Name"};
+    int numberOfColumns = ARRAY_SIZE(predefinedSpreadsheetColumns);
 
     const char workbookName[] = "stationsinformation.xlsx";
     lxw_workbook  *workbook  = workbook_new(workbookName);    // create a new workbook
     lxw_worksheet *worksheet = workbook_add_worksheet(workbook, NULL);  // add a sheet to the newly created workbook
     lxw_error worksheetError;
-    initWorksheet(worksheet, worksheetError, fptr, schema, NUM_COLUMNS);   // initialize worksheet with titles
+    initWorksheet(worksheet, worksheetError, fptr, predefinedSpreadsheetColumns, numberOfColumns);   // initialize worksheet with titles
     IedConnection connection = IedConnection_create();  // create a connection
     IedClientError err;     // error reason
+    int tcpPort = 102;
 
+    int writtenSpreadsheetColumns = numberOfColumns;
+    int count = 0;
+    GeneralPath *generalPaths = parseGeneralPaths(tokens, fileContents, readTokens, fptr, &writtenSpreadsheetColumns, &count);
+    if (!generalPaths){
+        LOG(fptr, "Couldn't parse genereal paths!\n\n");
+        exitCode = -1;
+        goto exit_wo_cleanup;
+    }
+    writeWorksheetTitles(worksheet, worksheetError, fptr, generalPaths, count, numberOfColumns);
 
-
-    int IPCol = get_column_index("Device", schema, NUM_COLUMNS);
+    int IPCol = get_column_index("Device", predefinedSpreadsheetColumns, numberOfColumns);
     if (IPCol == -1){
         LOG(fptr, "Couldn't find spreadsheet title 'Device'.\n\n");
     }
 
-    int nameCol = get_column_index("IED Name", schema, NUM_COLUMNS);
+    int nameCol = get_column_index("IED Name", predefinedSpreadsheetColumns, numberOfColumns);
     if (nameCol == -1){
         LOG(fptr, "Couldn't find spreadsheet title 'IED Name'.\n\n");
     }
-
-    int tcpPort = 102;  // TCP port of device (IEC 16850 has port 102 as standard)
-    parseUserPaths(&parser, tokens, fileContents, bytesRead, readTokens, fptr, tcpPort, ipRange.minSuffix, worksheet, NUM_COLUMNS);
 
     for(size_t min = ipRange.minSuffix; (min <= ipRange.maxSuffix && min <= 254); min++){   // iterate through all ip addresses in the range
         char concatenatedIP[16]; // buffer for holding IP address
@@ -133,14 +126,14 @@ int main(){
             LOG(fptr, "Couldn't write to worksheet, returned with error code %d (%s)\n", worksheetError, lxw_strerror(worksheetError));
         }
 
-        int pingCol = get_column_index("Ping", schema, NUM_COLUMNS);
+        int pingCol = get_column_index("Ping", predefinedSpreadsheetColumns, numberOfColumns);
         if (pingCol == -1){
             LOG(fptr, "Couldn't find spreadsheet title 'Ping'.\n");
         }
 
         bool canPing = checkForPingAnswer(concatenatedIP, worksheet, row, worksheetError, fptr, pingCol);   // check if device answers to ping
         if (canPing){
-            int MMSCol = get_column_index("MMS", schema, NUM_COLUMNS);
+            int MMSCol = get_column_index("MMS", predefinedSpreadsheetColumns, numberOfColumns);
             if (MMSCol == -1){
                 LOG(fptr, "Couldn't find spreadsheet title 'MMS'.\n");
             }
@@ -156,36 +149,15 @@ int main(){
                     }
                 }
 
-                LinkedList logicalNodes = IedConnection_getLogicalDeviceDirectory(connection, &err, deviceName);    // fetch all logical nodes
-
-                char *logicalNode = findLogicalNode(logicalNodes, "LPHD0");    // find correct logical node (LPHD0, LPHD1, LLN0)
-                LOG(fptr, "found logicalNode: %s\n", logicalNode);
-
-                dataAttribute DAs1[] = {
-                    {"vendor", "PhyNam", 4},
-                    {"model", "PhyNam", 5},
-                    {"serNum", "PhyNam", 6},
-                    {"swRev", "PhyNam", 7},
-                    {"hwRev", "PhyNam", 8}
-                };
-                int DASize = sizeof(DAs1) / sizeof(DAs1[0]);
-                processDeviceData(connection, &err, deviceName, logicalNode, DAs1, DASize, worksheet, row, worksheetError ,fptr);   // read device data and write it to the worksheet
-
-                logicalNode = findLogicalNode(logicalNodes, "LLN0");    // find correct logical node (LPHD0, LPHD1, LLN0)
-                LOG(fptr, "\nfound logicalNode: %s\n", logicalNode);
-
-                dataAttribute DAs2[] = {
-                    {"configRev", "NamPlt", 9},
-                    {"ldNs", "NamPlt", 10}
-                };
-                DASize = sizeof(DAs2) / sizeof(DAs2[0]);
-                processDeviceData(connection, &err, deviceName, logicalNode, DAs2, DASize, worksheet, row, worksheetError ,fptr);   // read device data and write it to the worksheet
+                processDeviceData(connection, &err, deviceName, generalPaths, count, worksheet, row, worksheetError, fptr);   // read device data and write it to the worksheet
             }
         }
 
         LOG(fptr, "\n");
         IedConnection_close(connection);
     } 
+
+    parseUserPaths(tokens, fileContents, readTokens, fptr, tcpPort, ipRange.minSuffix, worksheet, writtenSpreadsheetColumns, generalPaths, count);
 
 cleanup:
     IedConnection_destroy(connection);

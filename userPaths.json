@@ -1,18 +1,30 @@
 {
-    "userDefined": [
+    "GenericPaths" : [
+        {
+        "Vendor" : ["LPHD1.PhyNam.vendor"],
+        "Model" : ["LPHD1.PhyNam.model"],
+        "Serial Number" : ["LPHD1.PhyNam.serNum"],
+        "SW Version" : ["LPHD1.PhyNam.swRev"],
+        "HW Version" : ["LPHD1.PhyNam.hwRev"],
+        "Config Version" : ["LLN0.NamPlt.configRev"],
+        "IEC61850 Version" : ["LLN0.NamPlt.ldNs"]
+        }
+    ],
+    
+    "DeviceSpecificPaths" : [
         {
         "Title" :  "MyDescription", 
-        "Path" : "simpleIOGenericIO/LLN0.NamPlt.d", 
+        "Path" : "SampleIEDDeviceLD0/LLN0.NamPlt.d", 
         "IpAddress" : "127.0.0.8"
         },
         {
-        "Title" :  "MyVendor", 
-        "Path" : "simpleIOGenericIO/LLN0.NamPlt.vendor", 
+        "Title" :  "Vendor", 
+        "Path" : "SampleIEDDeviceLD0/LLN0.NamPlt.vendor", 
         "IpAddress" : "127.0.0.13"
         },
         {
         "Title" :  "MySwRev", 
-        "Path" : "simpleIOGenericIO/LLN0.NamPlt.swRev", 
+        "Path" : "SampleIEDDeviceLD0/LLN0.NamPlt.swRev", 
         "IpAddress" : "127.0.0.11"
         }
     ]

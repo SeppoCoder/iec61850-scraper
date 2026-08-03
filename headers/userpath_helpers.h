@@ -3,7 +3,9 @@
 
 #define JSMN_HEADER
 
-#include "usefullmacros.h"
+#pragma once
+
+#include "usefulmacros.h"
 #include "xlsx_helpers.h"
 
 #include "jsmn.h"
@@ -18,12 +20,20 @@ typedef struct {
     char ipAddr[24];
 } UserPath;
 
+typedef struct GeneralPath {
+    char excelTitle[64];
+    char paths[10][64];
+    int excelColumn;
+} GeneralPath;
+
 int readFileToString(const char *fileName, char *fileBuf[]);
 
 int jsoneq(const char *json, jsmntok_t *tok, const char *s);
 
 int initJsmn(jsmn_parser *parser, jsmntok_t **tokens, const char *fileContents, int fileSize, FILE *fptr);
 
-void parseUserPaths(jsmn_parser *parser, jsmntok_t *tokens, const char *fileContents, int fileSize, int readTokens, FILE *fptr, int tcpPort, int ipMinHost, lxw_worksheet *worksheet, int maxStaticCol);
+GeneralPath *parseGeneralPaths(jsmntok_t *tokens, const char *fileContents, int readTokens, FILE *fptr, int *maxStaticCol, int *count);
+
+void parseUserPaths(jsmntok_t *tokens, const char *fileContents, int readTokens, FILE *fptr, int tcpPort, int ipMinHost, lxw_worksheet *worksheet, int maxStaticCol, GeneralPath *path, int count);
 
 #endif

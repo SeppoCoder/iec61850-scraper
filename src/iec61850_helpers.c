@@ -40,39 +40,46 @@ bool writeDeviceData(MmsValue *value, const char *daRef, lxw_worksheet *workshee
             if (worksheetError != LXW_NO_ERROR){
                 LOG(fptr, "Couldn't write to worksheet, returned with error code %d (%c).\n", worksheetError, lxw_strerror(worksheetError));
             }
-            return false;
+            return true;
         }
-        if(!firstIteration){
+        if(firstIteration){
             LOG(fptr, "Error while reading from path: %s\n", daRef);
         }
     }
     else{
         LOG(fptr, "Error reading from IED!\n REASON: %s.\n", IedClientError_toString(*err));
-        return false;
     }
 
-    return true;
+    return false;
 }
 
-void processUserDevice(const char *ipAddr, int tcpPort, const char *path, int ipMinHost, lxw_worksheet *worksheet, int excelCol, FILE *fptr){
-    LOG(fptr, "\nProcessing user specific device...\n");
+int calculateIpIndex(const char *ipAddr, int ipMinHost, FILE *fptr){
     char *ipHostDot = strrchr(ipAddr, '.');
     char *ipHost = (ipHostDot == NULL) ? NULL : ipHostDot + 1;
     if (!ipHost){
         LOG(fptr,"Error while parsing user given IP.\n");
-        return;
+        return -1;
     }
 
     int ipHostInt = atoi(ipHost);
     if (ipHostInt == 0){
         LOG(fptr,"Error while converting user given IP to integer.\n");
-        return;
+        return -1;
     }
     int ipIndex = ipHostInt - ipMinHost + 1;
     if (ipIndex < 0) {
         LOG(fptr,"Error while calculating IP index.\n");
-        return;
+        return -1;
     }
+
+    return ipIndex;
+}
+
+void processUserDevice(const char *ipAddr, int tcpPort, const char *path, int ipMinHost, lxw_worksheet *worksheet, int excelCol, FILE *fptr){
+    LOG(fptr, "\nProcessing user specific device...\n");
+    int ipIndex = calculateIpIndex(ipAddr, ipMinHost, fptr);
+    if (ipIndex < 0){ return; }
+    
     LOG(fptr, "Creating connection!\n");
     IedConnection connection = IedConnection_create();
     IedClientError err;
@@ -87,35 +94,39 @@ void processUserDevice(const char *ipAddr, int tcpPort, const char *path, int ip
     }
     LOG(fptr, "Connected to user specified device!\n\n");
 
-    bool tryAgain = false;
+    bool success = false;
     MmsValue *value = IedConnection_readObject(connection, &err, path, IEC61850_FC_DC);
-    tryAgain = writeDeviceData(value, path, worksheet, excelCol, ipIndex, fptr, &err, tryAgain);
-    if (tryAgain){
-        LOG(fptr, "Trying again, now reading with FC: IEC61850_FC_EX");
+    success = writeDeviceData(value, path, worksheet, excelCol, ipIndex, fptr, &err, false);
+    if (!success){
+        LOG(fptr, "Trying again, now reading with FC: IEC61850_FC_EX\n");
         value = IedConnection_readObject(connection, &err, path, IEC61850_FC_EX);
-        writeDeviceData(value, path, worksheet, excelCol, ipIndex, fptr, &err, tryAgain);
-        }
+        writeDeviceData(value, path, worksheet, excelCol, ipIndex, fptr, &err, true);
+    }
     MmsValue_delete(value);
 
     IedConnection_destroy(connection);
-}
+} 
 
-
-void processDeviceData(IedConnection con, IedClientError *err, const char *deviceName, const char *nodeName, dataAttribute DAs[], int DASize, lxw_worksheet *worksheet, int row, lxw_error worksheetError, FILE *fptr){
+void processDeviceData(IedConnection con, IedClientError *err, const char *deviceName, GeneralPath generalPath[], int count, lxw_worksheet *worksheet, int row, lxw_error worksheetError, FILE *fptr){
     char daRef[64];     // create buffer for copy and modification of attribute path
     /* iterate through all data attributes*/
-    for(size_t i = 0; i < DASize; i++){
-        bool tryAgain = false;
-        snprintf(daRef, sizeof(daRef), "%s/%s.%s.%s", deviceName, nodeName, DAs[i].DO, DAs[i].DA);     //concatenate the different paths to a full path
+    for(size_t i = 0; i < count; i++){
+        for (size_t j = 0; *generalPath[i].paths[j] != '\0'; j++){
+            bool success = false;
+            snprintf(daRef, sizeof(daRef), "%s/%s", deviceName, generalPath[i].paths[j]);     //concatenate the different paths to a full path
 
-        MmsValue *value = IedConnection_readObject(con, err, daRef, IEC61850_FC_DC);    // read object at path
-        tryAgain = writeDeviceData(value, daRef, worksheet, DAs[i].excelCol, row, fptr, err, tryAgain);
-        if (tryAgain){
-            value = IedConnection_readObject(con, err, daRef, IEC61850_FC_EX);
-            writeDeviceData(value, daRef, worksheet, DAs[i].excelCol, row, fptr, err, tryAgain);
+            MmsValue *value = IedConnection_readObject(con, err, daRef, IEC61850_FC_DC);    // read object at path
+            success = writeDeviceData(value, daRef, worksheet, generalPath[i].excelColumn, row, fptr, err, false);
+            if (!success){
+                value = IedConnection_readObject(con, err, daRef, IEC61850_FC_EX);
+                success = writeDeviceData(value, daRef, worksheet, generalPath[i].excelColumn, row, fptr, err, true);
+            }
+
+            MmsValue_delete(value);    
+            if (success){
+                break;
+            }
         }
-
-        MmsValue_delete(value);
     }
 }
 
@@ -123,7 +134,6 @@ void processDeviceData(IedConnection con, IedClientError *err, const char *devic
 char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr, char *iedName){
     LOG(fptr, "Finding logical device...\n");
     const char *LDs[] = {"LD0", "Application"};
-    const int LDSize = sizeof(LDs) / sizeof(LDs[0]);
     char *pos;
     int iedNameLength;
 
@@ -136,7 +146,7 @@ char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr, char *iedN
     LinkedList currentDevice = LinkedList_getNext(LDList);  
     while (currentDevice){
 
-        for (int i = 0; i < LDSize; i++){
+        for (int i = 0; i < ARRAY_SIZE(LDs); i++){
             if(pos = strstr(currentDevice->data, LDs[i])){     // looking for device which includes substring
                 LOG(fptr, "Found device %s\n\n", currentDevice->data);
 
@@ -168,27 +178,19 @@ char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr, char *iedN
 } 
 
 
-char *findLogicalNode(LinkedList logicalNodes, const char *priorityName){
+char *findLogicalNode(LinkedList logicalNodes){
     char *LNsToSearch[] = {"LPHD0", "LPHD1", "LLN0"};
 
     LinkedList current = LinkedList_getNext(logicalNodes);
 
-    LinkedList currentCopy1 = current;  // copy 
-    while (currentCopy1){
-        if (strcmp(priorityName, currentCopy1->data) == 0) {
-            return currentCopy1->data; 
-        }   
-        currentCopy1 = currentCopy1->next;
-    }
+    for (size_t i = 0; i < ARRAY_SIZE(LNsToSearch); i++){
+        LinkedList temp = current;  // copy 
 
-    for (size_t i = 0; i < sizeof(LNsToSearch) / sizeof(LNsToSearch[0]); i++){
-        LinkedList currentCopy2 = current;  // copy 
-
-        while (currentCopy2){
-            if (strcmp(LNsToSearch[i], currentCopy2->data) == 0) {
-                return currentCopy2->data; 
+        while (temp){
+            if (strcmp(LNsToSearch[i], temp->data) == 0) {
+                return temp->data; 
             }   
-            currentCopy2 = currentCopy2->next;
+            temp = temp->next;
         }
     }
     
