@@ -12,6 +12,7 @@
     Running on linux with wine: wine src/main.exe 
 */
 
+
 #include "usefulmacros.h"
 
 #include "gui.h"        // gui header for including GUI functions
@@ -31,7 +32,6 @@ int main(){
 
     FILE *fptr; 
     fptr = fopen("stationslogg.log", "w"); // create log file
-
 
     char *fileContents; // dynamically allocated inside readFileToString
     int bytesRead = readFileToString("userPaths.json", &fileContents);
@@ -85,9 +85,11 @@ int main(){
     const char *predefinedSpreadsheetColumns[] = {"Device", "Ping", "MMS", "IED Name"};
     int numberOfColumns = ARRAY_SIZE(predefinedSpreadsheetColumns);
 
-    const char workbookName[] = "stationsinformation.xlsx";
+    const char workbookNameSuffix[] = "stationsinformation.xlsx";
+    char workbookName[64];
+    snprintf(workbookName, sizeof(workbookName), "%s %s", netInfo.computerName, workbookNameSuffix);
     lxw_workbook  *workbook  = workbook_new(workbookName);    // create a new workbook
-    lxw_worksheet *worksheet = workbook_add_worksheet(workbook, NULL);  // add a sheet to the newly created workbook
+    lxw_worksheet *worksheet = workbook_add_worksheet(workbook, netInfo.computerName);  // add a sheet to the newly created workbook
     lxw_error worksheetError;
     initWorksheet(worksheet, worksheetError, fptr, predefinedSpreadsheetColumns, numberOfColumns);   // initialize worksheet with titles
     IedConnection connection = IedConnection_create();  // create a connection

@@ -27,6 +27,15 @@ NetworkInfo getInfoFromNetwork(const wchar_t *friendlyName, FILE *fptr){
     wprintf(L"Fetching network info from '%ls'\n", friendlyName);
     NetworkInfo info = {0}; // initialize "empty" struct
 
+    char hostnameBuf[128];
+    int hostnameSuccess = gethostname(hostnameBuf, sizeof(hostnameBuf));
+    if (hostnameSuccess != 0){
+        LOG(fptr, "Couldn't retrieve computer name.\n");
+        strncpy(hostnameBuf, "N/A", sizeof("N/A"));
+    }
+
+    strncpy(info.computerName, hostnameBuf, sizeof(info.computerName));
+
     // Setup variables for GetAdaptersAddresses
     ULONG family = AF_INET; // IPv4
     ULONG flags = GAA_FLAG_INCLUDE_PREFIX; 

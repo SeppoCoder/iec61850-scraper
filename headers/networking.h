@@ -9,6 +9,7 @@ typedef struct {
     char hostname[32];
     char ip[16];
     uint8_t subnet_mask;
+    char computerName[128];
     int success; 
 } NetworkInfo;
 
