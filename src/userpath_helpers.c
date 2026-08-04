@@ -20,8 +20,8 @@ int readFileToString(const char *fileName, char *fileBuf[]){
         return -1;
     }
 
-    size_t bytesRead = fread(*fileBuf, 1, fileSize, fptr);
-   (*fileBuf)[bytesRead] = '\0';
+    size_t bytesRead = fread(*fileBuf, 1, fileSize, fptr);  // read file contents into buffer
+   (*fileBuf)[bytesRead] = '\0';    
 
     fclose(fptr);
     return bytesRead;
@@ -52,10 +52,11 @@ int initJsmn(jsmn_parser *parser, jsmntok_t **tokens, const char *fileContents, 
         return -1;
     }
 
-    jsmn_init(parser);     // init again
+    jsmn_init(parser);     // Initialize again
     int readTokens = jsmn_parse(parser, fileContents, fileSize, *tokens, tokenCount);   // parse for real this time
     if (readTokens < 0){
         LOG(fptr, "Failed to parse JSON: %d\n", readTokens);
+        free(*tokens);
         return -1;
     }
 
@@ -106,23 +107,24 @@ void parseUserPaths(jsmntok_t *tokens, const char *fileContents, int readTokens,
     char titleBuf[64];
     char pathBuf[64];
     char ipBuf[24];
-    int column = maxCol;
+    int column = maxCol;    // initialize the column to be the first empty column
     
     for (int i = 1; i < readTokens; i++){
         if (jsoneq(fileContents, &tokens[i], "Title") == 0){
-            strncpy(titleBuf, fileContents + tokens[i + 1].start, tokens[i + 1].end - tokens[i + 1].start + 1);
+            strncpy(titleBuf, fileContents + tokens[i + 1].start, tokens[i + 1].end - tokens[i + 1].start + 1); // copy contents of title attribute to buffer
             titleBuf[tokens[i + 1].end - tokens[i + 1].start] = '\0';
             LOG(fptr, "Title: %s\n", titleBuf);
 
             for (int pathIdx = 0; pathIdx < count; pathIdx++){
+                // check if we already have this attribute title in the spreadsheet
                 if (strcasecmp(titleBuf, path[pathIdx].excelTitle) == 0){
-                    column = path[pathIdx].excelColumn;
+                    column = path[pathIdx].excelColumn; // update column to correspond to the column with the same title
                 }
             }
 
-            worksheet_write_string(worksheet, 0, column, titleBuf, NULL);
-            worksheet_set_column(worksheet, column, column, 30, NULL);
-            i++;
+            worksheet_write_string(worksheet, 0, column, titleBuf, NULL);   // write the title to the spreadsheet
+            worksheet_set_column(worksheet, column, column, 30, NULL);  // set the column width
+            i++;    // skip one token (to get next key)
         }else if (jsoneq(fileContents, &tokens[i], "Path") == 0){   
             strncpy(pathBuf, fileContents + tokens[i + 1].start, tokens[i + 1].end - tokens[i + 1].start + 1);
             pathBuf[tokens[i + 1].end - tokens[i + 1].start] = '\0';
@@ -132,10 +134,10 @@ void parseUserPaths(jsmntok_t *tokens, const char *fileContents, int readTokens,
             strncpy(ipBuf, fileContents + tokens[i + 1].start, tokens[i + 1].end - tokens[i + 1].start + 1);
             ipBuf[tokens[i + 1].end - tokens[i + 1].start] = '\0';
             LOG(fptr, "IpAddress: %s\n", ipBuf);
-            processUserDevice(ipBuf, tcpPort, pathBuf, ipMinHost, worksheet, column, fptr);
+            processUserDevice(ipBuf, tcpPort, pathBuf, ipMinHost, worksheet, column, fptr); // process the user defined path
             i++;
-            maxCol++;
-            column = maxCol;
+            maxCol++;   // increase maxCol to make sure the next user path will be written to the next empty spot in the spreadsheet
+            column = maxCol;    // reset the column to that empty spot, in case we overwrote column with a previous column
         }
     }
 }

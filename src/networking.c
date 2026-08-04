@@ -27,14 +27,14 @@ NetworkInfo getInfoFromNetwork(const wchar_t *friendlyName, FILE *fptr){
     wprintf(L"Fetching network info from '%ls'\n", friendlyName);
     NetworkInfo info = {0}; // initialize "empty" struct
 
-    char hostnameBuf[128];
+    char hostnameBuf[128];  // Buffer for holding computer name
     int hostnameSuccess = gethostname(hostnameBuf, sizeof(hostnameBuf));
     if (hostnameSuccess != 0){
         LOG(fptr, "Couldn't retrieve computer name.\n");
-        strncpy(hostnameBuf, "N/A", sizeof("N/A"));
+        strncpy(hostnameBuf, "N/A", sizeof(hostnameBuf));
     }
 
-    strncpy(info.computerName, hostnameBuf, sizeof(info.computerName));
+    strncpy(info.computerName, hostnameBuf, sizeof(info.computerName)); // copy contents of computer name buffer into network info struct
 
     // Setup variables for GetAdaptersAddresses
     ULONG family = AF_INET; // IPv4
@@ -72,8 +72,8 @@ NetworkInfo getInfoFromNetwork(const wchar_t *friendlyName, FILE *fptr){
                     // Convert the numeric IP to a readable string
                     inet_ntop(AF_INET, &(sa_in->sin_addr), ipString, sizeof(ipString));
                     
-                    strncpy(info.ip, ipString, sizeof(info.ip));
-                    info.subnet_mask = pUnicast->OnLinkPrefixLength;
+                    strncpy(info.ip, ipString, sizeof(info.ip));    // copy ip into network info struct
+                    info.subnet_mask = pUnicast->OnLinkPrefixLength;    // assign subnet mask 
                     info.success = 1;
                 }
             }
@@ -96,7 +96,6 @@ NetworkInfo getInfoFromNetwork(const wchar_t *friendlyName, FILE *fptr){
 IPRange getIPRange(NetworkInfo *netInfo, FILE *fptr){
     LOG(fptr, "Calculating IP Range...\n");
     IPRange range = {0};
-    range.success = 0;  // init to fail
 
     if(netInfo->subnet_mask > 32){ 
         LOG(fptr, "Subnet is to large.\n");
@@ -151,7 +150,7 @@ NetworkInfo findMatchingNetwork(FILE *fptr){
     LOG(fptr, "Finding available network...\n");
     NetworkInfo netInfo;
 
-    netInfo = getInfoFromNetwork(L"stationsbuss", fptr);
+    netInfo = getInfoFromNetwork(L"stationsbuss", fptr);    // try to find network
     if(netInfo.success){
         LOG(fptr, "found network '%s' with IP: %s, and netmask: %d\n\n", netInfo.hostname, netInfo.ip, netInfo.subnet_mask);
     } 

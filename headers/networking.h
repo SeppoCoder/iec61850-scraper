@@ -23,6 +23,7 @@ typedef struct {
     int success;
 } IPRange;
 
+/* Create possibility for network specific functions on windows OS. */
 int initNetwork(void);
 
 /* Tries to find the network with the given friendlyName */

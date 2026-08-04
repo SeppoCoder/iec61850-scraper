@@ -4,7 +4,7 @@
 
 #include "iec61850_helpers.h"
 
-bool canConnectToIED(IedConnection connection, IedClientError *err, const char *deviceIP, int tcpPort, lxw_worksheet *worksheet, int row, lxw_error worksheetError, FILE *fptr, int MMSCol){
+bool connectToIED(IedConnection connection, IedClientError *err, const char *deviceIP, int tcpPort, lxw_worksheet *worksheet, int row, lxw_error worksheetError, FILE *fptr, int MMSCol){
     LOG(fptr, "Connecting to IED...\n");
     IedConnection_connect(connection, err, deviceIP, tcpPort);     // connect to physical device using the connection above
 
@@ -130,22 +130,20 @@ void processDeviceData(IedConnection con, IedClientError *err, const char *devic
     }
 }
 
-
 char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr, char *iedName){
     LOG(fptr, "Finding logical device...\n");
-    const char *LDs[] = {"LD0", "Application"};
-    char *pos;
+    const char *LDs[] = {"LD0", "Application"}; // Priority LDs
+    char *pos;  // pointer for pointing where substring in string is found
     int iedNameLength;
 
     LinkedList LDList = IedConnection_getServerDirectory(con, err, false);  // fetch all Logical devices
     if(!LDList){
         LOG(fptr, "No logical devices found!\n\n");
-        return "";
+        return '\0';
     }
 
     LinkedList currentDevice = LinkedList_getNext(LDList);  
     while (currentDevice){
-
         for (int i = 0; i < ARRAY_SIZE(LDs); i++){
             if(pos = strstr(currentDevice->data, LDs[i])){     // looking for device which includes substring
                 LOG(fptr, "Found device %s\n\n", currentDevice->data);
@@ -164,7 +162,7 @@ char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr, char *iedN
 
     LinkedList firstDevice = LinkedList_getNext(LDList);
     if (firstDevice) {
-        LOG(fptr, "Couldn't find logical device including 'LD0'. Defaulting to first logical device found (%s).\n\n", firstDevice->data);
+        LOG(fptr, "Couldn't find logical device including 'LD0' or 'Application'. Defaulting to first logical device found (%s).\n\n", firstDevice->data);
         iedNameLength = strlen(firstDevice->data);
         if (iedNameLength > 0){
             strncpy(iedName, firstDevice->data, iedNameLength);   // take out IED name via copying 'iedNameLength' chars to iedName
@@ -174,11 +172,11 @@ char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr, char *iedN
     }
 
     LOG(fptr, "No logical device found!\n\n");
-    return "";
+    return '\0';
 } 
 
 
-char *findLogicalNode(LinkedList logicalNodes){
+__attribute__((unused)) char *findLogicalNode(LinkedList logicalNodes){
     char *LNsToSearch[] = {"LPHD0", "LPHD1", "LLN0"};
 
     LinkedList current = LinkedList_getNext(logicalNodes);
@@ -197,5 +195,5 @@ char *findLogicalNode(LinkedList logicalNodes){
     if(current){
         return current->data;
     }
-    return "";
+    return '\0';
 }

@@ -13,7 +13,7 @@ const char *showListBox(char *choices[], int size){
     while (!GuiButton((Rectangle){ 150, 220, 100, 40 }, "Välj")) {
         
         BeginDrawing();
-        ClearBackground(GetColor(GuiGetStyle(DEFAULT, BACKGROUND_COLOR))); // Standard GUI background
+        ClearBackground(GetColor(GuiGetStyle(DEFAULT, BACKGROUND_COLOR)));
         GuiSetStyle(DEFAULT, TEXT_SIZE, GuiGetFont().baseSize*2); 
 
         DrawText("Välj ett nätverk!", 50, 10, TEXT_SIZE * 2, BLACK);
