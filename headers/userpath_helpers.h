@@ -5,6 +5,7 @@
 
 #include "usefulmacros.h"
 #include "xlsx_helpers.h"
+#include "networking.h"
 
 #include "jsmn.h"
 #include <stdlib.h>
@@ -31,6 +32,6 @@ int initJsmn(jsmn_parser *parser, jsmntok_t **tokens, const char *fileContents, 
 GeneralPath *parseGeneralPaths(jsmntok_t *tokens, const char *fileContents, int readTokens, FILE *fptr, int *maxStaticCol, int *count);
 
 /* Parse and process user specific paths. */
-void parseUserPaths(jsmntok_t *tokens, const char *fileContents, int readTokens, FILE *fptr, int tcpPort, int ipMinHost, lxw_worksheet *worksheet, int maxStaticCol, GeneralPath *path, int count);
+void parseUserPaths(jsmntok_t *tokens, const char *fileContents, int readTokens, FILE *fptr, int tcpPort, int ipMinHost, lxw_worksheet *worksheet, int maxStaticCol, GeneralPath *path, int count, IPRange *ipRange);
 
 #endif

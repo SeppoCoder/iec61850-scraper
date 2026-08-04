@@ -53,7 +53,7 @@ bool writeDeviceData(MmsValue *value, const char *daRef, lxw_worksheet *workshee
     return false;
 }
 
-int calculateIpIndex(const char *ipAddr, int ipMinHost, FILE *fptr){
+int calculateIpIndex(const char *ipAddr, int ipMinHost, FILE *fptr, IPRange *ipRange){
     char *ipHostDot = strrchr(ipAddr, '.');
     char *ipHost = (ipHostDot == NULL) ? NULL : ipHostDot + 1;
     if (!ipHost){
@@ -61,9 +61,10 @@ int calculateIpIndex(const char *ipAddr, int ipMinHost, FILE *fptr){
         return -1;
     }
 
+
     int ipHostInt = atoi(ipHost);
-    if (ipHostInt == 0){
-        LOG(fptr,"Error while converting user given IP to integer.\n");
+    if (ipHostInt == 0 || ipHostInt < ipRange->minSuffix || ipHostInt > ipRange->maxSuffix || !strstr(ipAddr, ipRange->IPPrefix)){
+        LOG(fptr,"IP address not valid.\n");
         return -1;
     }
     int ipIndex = ipHostInt - ipMinHost + 1;
@@ -75,24 +76,22 @@ int calculateIpIndex(const char *ipAddr, int ipMinHost, FILE *fptr){
     return ipIndex;
 }
 
-void processUserDevice(const char *ipAddr, int tcpPort, const char *path, int ipMinHost, lxw_worksheet *worksheet, int excelCol, FILE *fptr){
+void processUserDevice(const char *ipAddr, int tcpPort, const char *path, int ipMinHost, lxw_worksheet *worksheet, int excelCol, FILE *fptr, IPRange *ipRange){
     LOG(fptr, "\n-------------------------------\n");
-    LOG(fptr, "Processing user specific device...\n");
-    int ipIndex = calculateIpIndex(ipAddr, ipMinHost, fptr);
+    LOG(fptr, "Processing user specific device (%s)\n", ipAddr);
+    int ipIndex = calculateIpIndex(ipAddr, ipMinHost, fptr, ipRange);
     if (ipIndex < 0){ 
         LOG(fptr, "Invalid IP address!\n");
         return;
     }
     
-    LOG(fptr, "Creating connection!\n");
     IedConnection connection = IedConnection_create();
     IedClientError err;
-    LOG(fptr, "Connection created!\n");
+
     IedConnection_connect(connection, &err, ipAddr, tcpPort);
-    LOG(fptr, "Connecting!\n");
     if (err != IED_ERROR_OK){
         LOG(fptr, "Couldn't connect to device!\n");
-        LOG(fptr, "Error: %s\n\n", IedClientError_toString(err));
+        LOG(fptr, "Error: %s\n", IedClientError_toString(err));
         IedConnection_destroy(connection);
         return;
     }

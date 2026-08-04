@@ -98,7 +98,7 @@ GeneralPath *parseGeneralPaths(jsmntok_t *tokens, const char *fileContents, int 
     return generalPaths;
 } 
 
-void parseUserPaths(jsmntok_t *tokens, const char *fileContents, int readTokens, FILE *fptr, int tcpPort, int ipMinHost, lxw_worksheet *worksheet, int maxCol, GeneralPath *path, int count){
+void parseUserPaths(jsmntok_t *tokens, const char *fileContents, int readTokens, FILE *fptr, int tcpPort, int ipMinHost, lxw_worksheet *worksheet, int maxCol, GeneralPath *path, int count, IPRange *ipRange){
     if (readTokens < 1 || tokens[0].type != JSMN_OBJECT) {
         LOG(fptr, "Error while parsing user paths, Object expected!\n");
         return;
@@ -132,7 +132,7 @@ void parseUserPaths(jsmntok_t *tokens, const char *fileContents, int readTokens,
             for (int idx = 0; idx < tokens[i + 1].size; idx++){
                 strncpy(ipBuf, fileContents + tokens[i + 2 + idx].start, tokens[i + 2 + idx].end - tokens[i + 2 + idx].start + 1);
                 ipBuf[tokens[i + 2 + idx].end - tokens[i + 2 + idx].start] = '\0';
-                processUserDevice(ipBuf, tcpPort, pathBuf, ipMinHost, worksheet, column, fptr); // process the user defined path
+                processUserDevice(ipBuf, tcpPort, pathBuf, ipMinHost, worksheet, column, fptr, ipRange); // process the user defined path
             }
             
             i++;

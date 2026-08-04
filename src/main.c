@@ -164,10 +164,11 @@ int main(){
         IedConnection_close(connection);    // close IED connection after each try
     } 
 
-    parseUserPaths(tokens, fileContents, readTokens, fptr, tcpPort, ipRange.minSuffix, worksheet, writtenSpreadsheetColumns, generalPaths, count);  // parse user specific paths
+    parseUserPaths(tokens, fileContents, readTokens, fptr, tcpPort, ipRange.minSuffix, worksheet, writtenSpreadsheetColumns, generalPaths, count, &ipRange);  // parse user specific paths
 
 cleanup:
     IedConnection_destroy(connection); 
+    LOG(fptr, "\n-------------------------------\n");
     LOG(fptr, "\nIedConnection destroyed!\n");
 
     worksheetError = workbook_close(workbook);   // close and save workbook
@@ -188,6 +189,7 @@ cleanup:
     return exitCode;
 
 exit_wo_cleanup:
+    LOG(fptr, "\n-------------------------------\n");
     LOG(fptr, "Exiting with exit code %d\n", exitCode);
     return exitCode;
 }   

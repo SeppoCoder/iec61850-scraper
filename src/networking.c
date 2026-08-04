@@ -9,7 +9,6 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <math.h>
-#include <stdbool.h>
 
 #include "networking.h"
 
@@ -128,7 +127,7 @@ IPRange getIPRange(NetworkInfo *netInfo, FILE *fptr){
     char IPPrefix[13]; // maximum IPv4 length of 12 chars (+ null terminating character)
     unsigned lengthOfIPPrefix = strlen(netInfo->ip) - strlen(lastHostIP);    // calculate how many characters in IP address before last characters (e.g. 192.168.122.XX)
     strncpy(range.IPPrefix, netInfo->ip, lengthOfIPPrefix);    // copy prefix (192.168.122.)
-    range.IPPrefix[sizeof(range.IPPrefix) - 1] = '\0';
+    range.IPPrefix[lengthOfIPPrefix] = '\0';
 
     int assignMinChars = snprintf(range.hostMin, sizeof(range.hostMin), "%s%d", range.IPPrefix, range.minSuffix);  // concatenate suffix and min host
     if (assignMinChars < 0){ 

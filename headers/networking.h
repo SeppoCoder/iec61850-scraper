@@ -4,6 +4,8 @@
 #include "xlsx_helpers.h"
 #include "usefulmacros.h"
 
+#include <stdbool.h>
+
 /* Define a struct to hold the network data */
 typedef struct {
     char hostname[32];
