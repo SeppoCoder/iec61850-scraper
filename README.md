@@ -32,6 +32,6 @@ Where as a **user specific path** looks like this:
 {
     "Title" : "Example Title",
     "Path" : "LN99.DO99.DA99",
-    "IpAddress" : "192.168.0.1" 
+    "IpAddress" : ["192.168.0.2", "192.168.0.3", ...] 
 }
 ```
