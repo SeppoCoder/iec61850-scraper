@@ -113,7 +113,6 @@ void parseUserPaths(jsmntok_t *tokens, const char *fileContents, int readTokens,
         if (jsoneq(fileContents, &tokens[i], "Title") == 0){
             strncpy(titleBuf, fileContents + tokens[i + 1].start, tokens[i + 1].end - tokens[i + 1].start + 1); // copy contents of title attribute to buffer
             titleBuf[tokens[i + 1].end - tokens[i + 1].start] = '\0';
-            LOG(fptr, "Title: %s\n", titleBuf);
 
             for (int pathIdx = 0; pathIdx < count; pathIdx++){
                 // check if we already have this attribute title in the spreadsheet
@@ -128,13 +127,14 @@ void parseUserPaths(jsmntok_t *tokens, const char *fileContents, int readTokens,
         }else if (jsoneq(fileContents, &tokens[i], "Path") == 0){   
             strncpy(pathBuf, fileContents + tokens[i + 1].start, tokens[i + 1].end - tokens[i + 1].start + 1);
             pathBuf[tokens[i + 1].end - tokens[i + 1].start] = '\0';
-            LOG(fptr, "Path: %s\n", pathBuf);
             i++;
         }else if (jsoneq(fileContents, &tokens[i], "IpAddress") == 0){
-            strncpy(ipBuf, fileContents + tokens[i + 1].start, tokens[i + 1].end - tokens[i + 1].start + 1);
-            ipBuf[tokens[i + 1].end - tokens[i + 1].start] = '\0';
-            LOG(fptr, "IpAddress: %s\n", ipBuf);
-            processUserDevice(ipBuf, tcpPort, pathBuf, ipMinHost, worksheet, column, fptr); // process the user defined path
+            for (int idx = 0; idx < tokens[i + 1].size; idx++){
+                strncpy(ipBuf, fileContents + tokens[i + 2 + idx].start, tokens[i + 2 + idx].end - tokens[i + 2 + idx].start + 1);
+                ipBuf[tokens[i + 2 + idx].end - tokens[i + 2 + idx].start] = '\0';
+                processUserDevice(ipBuf, tcpPort, pathBuf, ipMinHost, worksheet, column, fptr); // process the user defined path
+            }
+            
             i++;
             maxCol++;   // increase maxCol to make sure the next user path will be written to the next empty spot in the spreadsheet
             column = maxCol;    // reset the column to that empty spot, in case we overwrote column with a previous column

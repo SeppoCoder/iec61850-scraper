@@ -4,6 +4,12 @@
  * @brief     Main file for automatic IEC61850 information scraper
  * @version   1.0
  * @date      2026-08-04
+ * @compile   x86_64-w64-mingw32-gcc src/main.c src/iec61850_helpers.c src/xlsx_helpers.c src/networking.c src/gui.c \
+    src/userpath_helpers.c src/jsmn.c -o IEC61850-Scraper.exe -I/home/sebli/libiec61850/.install/include \
+    -I/home/sebli/libxlsxwriter/include -Iheaders/ -L/home/sebli/iec61850-scraper/libs -L. -liec61850 -lhal \
+    -lxlsxwriter -lzs -liphlpapi -lws2_32 -lbcrypt -lraylib -lgdi32 -lwinmm -static -static-libgcc
+
+ * @run       wine scraper.exe
  */
 
 
@@ -162,7 +168,7 @@ int main(){
 
 cleanup:
     IedConnection_destroy(connection); 
-    LOG(fptr, "IedConnection destroyed!\n");
+    LOG(fptr, "\nIedConnection destroyed!\n");
 
     worksheetError = workbook_close(workbook);   // close and save workbook
     if (worksheetError != LXW_NO_ERROR){

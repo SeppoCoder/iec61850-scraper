@@ -4,7 +4,7 @@ Fetching network info from 'stationsbuss'
 Couldn't fetch info from predefined networks, asking user.
 Fetching network info from 'lo'
 Calculating IP Range...
-IP in range 127.0.0.2 - 127.0.0.1677721
+IP is in range 127.0.0.2 - 127.0.0.1677721
 
 Initializing worksheet...
 
@@ -5829,6 +5829,39 @@ Error while reading from path: SampleIEDDeviceLD0/LLN0.PhyNam.hwRev
 Error while reading from path: SampleIEDDeviceLD0/LLN0.NamPlt.configRev
 Error while reading from path: SampleIEDDeviceLD0/LLN0.NamPlt.ldNs
 
-Wrote results to SeppoUbuntu stationsinformation.xlsx
+
+-------------------------------
+Processing user specific device...
+Error while calculating IP index.
+Invalid IP address!
+
+-------------------------------
+Processing user specific device...
+Creating connection!
+Connection created!
+Connecting!
+Connected to user specified device!
+
+Successfull read from path: SampleIEDDeviceLD0/LLN0.NamPlt.d, with value desc
+
+-------------------------------
+Processing user specific device...
+Creating connection!
+Connection created!
+Connecting!
+Connected to user specified device!
+
+Successfull read from path: SampleIEDDeviceLD0/LLN0.NamPlt.d, with value desc
+
+-------------------------------
+Processing user specific device...
+Creating connection!
+Connection created!
+Connecting!
+Connected to user specified device!
+
+Successfull read from path: SampleIEDDeviceLD0/LLN0.NamPlt.d, with value desc
+
 IedConnection destroyed!
+Wrote results to SeppoUbuntu stationsinformation.xlsx
 Exiting with exit code 0

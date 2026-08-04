@@ -67,7 +67,7 @@ int calculateIpIndex(const char *ipAddr, int ipMinHost, FILE *fptr){
         return -1;
     }
     int ipIndex = ipHostInt - ipMinHost + 1;
-    if (ipIndex < 0) {
+    if (ipIndex <= 0) {
         LOG(fptr,"Error while calculating IP index.\n");
         return -1;
     }
@@ -76,9 +76,13 @@ int calculateIpIndex(const char *ipAddr, int ipMinHost, FILE *fptr){
 }
 
 void processUserDevice(const char *ipAddr, int tcpPort, const char *path, int ipMinHost, lxw_worksheet *worksheet, int excelCol, FILE *fptr){
-    LOG(fptr, "\nProcessing user specific device...\n");
+    LOG(fptr, "\n-------------------------------\n");
+    LOG(fptr, "Processing user specific device...\n");
     int ipIndex = calculateIpIndex(ipAddr, ipMinHost, fptr);
-    if (ipIndex < 0){ return; }
+    if (ipIndex < 0){ 
+        LOG(fptr, "Invalid IP address!\n");
+        return;
+    }
     
     LOG(fptr, "Creating connection!\n");
     IedConnection connection = IedConnection_create();
