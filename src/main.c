@@ -141,7 +141,7 @@ int main(){
             bool canConnect = connectToIED(connection, &err, concatenatedIP, tcpPort, worksheet, row, worksheetError, fptr, MMSCol);    // connect to IED
             if(canConnect){
                 char iedName[128];
-                char *deviceName = get_LD_name(connection, &err, fptr, iedName);  // fetch name of logical device and try to parse IED name from LD name
+                char *deviceName = get_LD_name(connection, &err, fptr, iedName, sizeof(iedName));  // fetch name of logical device and try to parse IED name from LD name
                 if (iedName){
                     worksheetError = worksheet_write_string(worksheet, row, nameCol, iedName, NULL);  // write device IP address to spreadsheet
                     if(worksheetError != LXW_NO_ERROR){

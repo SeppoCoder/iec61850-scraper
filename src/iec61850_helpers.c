@@ -133,7 +133,7 @@ void processDeviceData(IedConnection con, IedClientError *err, const char *devic
     }
 }
 
-char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr, char *iedName){
+char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr, char *iedName, size_t nameSize){
     LOG(fptr, "Finding logical device...\n");
     const char *LDs[] = {"LD0", "Application"}; // Priority LDs
     char *pos;  // pointer for pointing where substring in string is found
@@ -145,6 +145,7 @@ char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr, char *iedN
         return '\0';
     }
 
+    int bytesWritten;
     LinkedList currentDevice = LinkedList_getNext(LDList);  
     while (currentDevice){
         for (int i = 0; i < ARRAY_SIZE(LDs); i++){
@@ -152,10 +153,13 @@ char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr, char *iedN
                 LOG(fptr, "Found device %s\n\n", currentDevice->data);
 
                 iedNameLength = strlen(currentDevice->data) - strlen(pos);   // calculate length of Ied name
-                if (iedNameLength > 0){
-                    strncpy(iedName, currentDevice->data, iedNameLength);   // take out IED name via copying 'iedNameLength' chars to iedName
-                    iedName[iedNameLength] = '\0';  
+                if (iedNameLength > 0 && iedNameLength < nameSize){
+                    snprintf(iedName, nameSize, "%.*s", iedNameLength, currentDevice->data); // take out IED name via writing 'iedNameLength' chars to iedName
+                }else{
+                    LOG(fptr, "Couldn't retrieve IED name from logical device!\n");
+                    iedName[0] = '\0';
                 }
+                
                 return currentDevice->data;
             }    
         }
@@ -167,10 +171,13 @@ char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr, char *iedN
     if (firstDevice) {
         LOG(fptr, "Couldn't find logical device including 'LD0' or 'Application'. Defaulting to first logical device found (%s).\n\n", firstDevice->data);
         iedNameLength = strlen(firstDevice->data);
-        if (iedNameLength > 0){
-            strncpy(iedName, firstDevice->data, iedNameLength);   // take out IED name via copying 'iedNameLength' chars to iedName
-            iedName[iedNameLength] = '\0';
+        if (iedNameLength > 0 && iedNameLength < nameSize){
+            snprintf(iedName, nameSize, "%.*s", iedNameLength, firstDevice->data);  // take out IED name via writing 'iedNameLength' chars to iedName
+        }else{
+            LOG(fptr, "Couldn't retrieve IED name from logical device!\n");
+            iedName[0] = '\0';
         }  
+        
         return firstDevice->data;
     }
 

@@ -30,10 +30,9 @@ NetworkInfo getInfoFromNetwork(const wchar_t *friendlyName, FILE *fptr){
     int hostnameSuccess = gethostname(hostnameBuf, sizeof(hostnameBuf));
     if (hostnameSuccess != 0){
         LOG(fptr, "Couldn't retrieve computer name.\n");
-        strncpy(hostnameBuf, "N/A", sizeof(hostnameBuf));
+        snprintf(hostnameBuf, sizeof(hostnameBuf), "%s", "N/A");
     }
-
-    strncpy(info.computerName, hostnameBuf, sizeof(info.computerName)); // copy contents of computer name buffer into network info struct
+    snprintf(info.computerName, sizeof(info.computerName), "%s", hostnameBuf);
 
     // Setup variables for GetAdaptersAddresses
     ULONG family = AF_INET; // IPv4
@@ -47,7 +46,6 @@ NetworkInfo getInfoFromNetwork(const wchar_t *friendlyName, FILE *fptr){
         if (pAddresses == NULL) {
             LOG(fptr, "Couldn't allocate memory for network network buffer.\n");
             WSACleanup();
-            info.success = 0;
             return info;
         }
     }
@@ -71,16 +69,20 @@ NetworkInfo getInfoFromNetwork(const wchar_t *friendlyName, FILE *fptr){
                     // Convert the numeric IP to a readable string
                     inet_ntop(AF_INET, &(sa_in->sin_addr), ipString, sizeof(ipString));
                     
-                    strncpy(info.ip, ipString, sizeof(info.ip));    // copy ip into network info struct
+                    int bytesWritten = snprintf(info.ip, sizeof(info.ip), "%s", ipString);
+                    if (bytesWritten >= sizeof(info.ip)) {
+                        LOG(fptr, "IP is truncated!\n");
+                        return info;
+                    } 
+
                     info.subnet_mask = pUnicast->OnLinkPrefixLength;    // assign subnet mask 
-                    info.success = 1;
+                    info.success = 1;   // only update to success if we successfully find and copy the IP address
                 }
             }
             pCurrAddresses = pCurrAddresses->Next;  // continue stepping through the linked list
         }
     } else {
         LOG(fptr, "Call to GetAdaptersAddresses failed.\n");
-        info.success = 0;
     }
 
     // Cleanup
@@ -125,18 +127,29 @@ IPRange getIPRange(NetworkInfo *netInfo, FILE *fptr){
     }
 
     char IPPrefix[13]; // maximum IPv4 length of 12 chars (+ null terminating character)
-    unsigned lengthOfIPPrefix = strlen(netInfo->ip) - strlen(lastHostIP);    // calculate how many characters in IP address before last characters (e.g. 192.168.122.XX)
-    strncpy(range.IPPrefix, netInfo->ip, lengthOfIPPrefix);    // copy prefix (192.168.122.)
-    range.IPPrefix[lengthOfIPPrefix] = '\0';
+
+    int lengthOfIPPrefix = strlen(netInfo->ip) - strlen(lastHostIP);    // calculate how many characters in IP address before last characters (e.g. 192.168.122.XX)
+    if (lengthOfIPPrefix < 0 || lengthOfIPPrefix >= sizeof(range.IPPrefix)){
+        LOG(fptr, "Calculation of IP prefix length went wrong!\n");
+        return range;
+    }
+
+    int bytesWritten = snprintf(range.IPPrefix, sizeof(range.IPPrefix), "%.*s", lengthOfIPPrefix, netInfo->ip);
+    if (bytesWritten < 0 || bytesWritten >= sizeof(range.IPPrefix)){
+        LOG(fptr, "IP prefix is truncated, or formatting failed!\n");
+        return range;
+    }
 
     int assignMinChars = snprintf(range.hostMin, sizeof(range.hostMin), "%s%d", range.IPPrefix, range.minSuffix);  // concatenate suffix and min host
-    if (assignMinChars < 0){ 
-        LOG(fptr, "Couldn't concatenate IP address, IP address is probably malformed.\n");
+    if (assignMinChars < 0 || assignMinChars >= sizeof(range.hostMin)){ 
+        LOG(fptr, "Couldn't concatenate min IP address, IP address is probably malformed.\n");
         return range; 
     }   
+    
     int assignMaxChars = snprintf(range.hostMax, sizeof(range.hostMax), "%s%d", range.IPPrefix, range.maxSuffix);  // concatenate suffix and max host
-    if (assignMaxChars < 0){ 
-        LOG(fptr, "Couldn't concatenate IP address, IP address is probably malformed.\n");
+    if (assignMaxChars < 0 || assignMaxChars >= sizeof(range.hostMax)){ 
+        LOG(fptr, "Assigned chars: %d\n Max size: %d\n", assignMaxChars, sizeof(range.hostMax));
+        LOG(fptr, "Couldn't concatenate max IP address (%s), IP address is probably malformed.\n", range.hostMax);
         return range; 
     }
 

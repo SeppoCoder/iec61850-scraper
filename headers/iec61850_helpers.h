@@ -30,7 +30,7 @@ void processUserDevice(const char *ipAddr, int tcpPort, const char *path, int ip
 void processDeviceData(IedConnection con, IedClientError *err, const char *deviceName, GeneralPath generalPath[], int count, lxw_worksheet *worksheet, int row, lxw_error worksheetError, FILE *fptr);
 
 /* Tries to find logical device 'LD0', if not found it return the first logical device. returns NULL if no devices found. */
-char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr, char *iedName);
+char *get_LD_name(IedConnection con, IedClientError *err, FILE *fptr, char *iedName, size_t nameSize);
 
 /* Tries to find one of the predefined logical nodes. Returns the first LN in the list if none of those are found. */
 char *findLogicalNode(LinkedList logicalNodes);

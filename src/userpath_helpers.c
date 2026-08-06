@@ -99,6 +99,7 @@ GeneralPath *parseGeneralPaths(jsmntok_t *tokens, const char *fileContents, int 
 } 
 
 void parseUserPaths(jsmntok_t *tokens, const char *fileContents, int readTokens, FILE *fptr, int tcpPort, int ipMinHost, lxw_worksheet *worksheet, int maxCol, GeneralPath *path, int count, IPRange *ipRange){
+    LOG(fptr, "Parsing User Specific Paths");
     if (readTokens < 1 || tokens[0].type != JSMN_OBJECT) {
         LOG(fptr, "Error while parsing user paths, Object expected!\n");
         return;
@@ -108,11 +109,12 @@ void parseUserPaths(jsmntok_t *tokens, const char *fileContents, int readTokens,
     char pathBuf[64];
     char ipBuf[24];
     int column = maxCol;    // initialize the column to be the first empty column
+    bool readError;
     
     for (int i = 1; i < readTokens; i++){
         if (jsoneq(fileContents, &tokens[i], "Title") == 0){
-            strncpy(titleBuf, fileContents + tokens[i + 1].start, tokens[i + 1].end - tokens[i + 1].start + 1); // copy contents of title attribute to buffer
-            titleBuf[tokens[i + 1].end - tokens[i + 1].start] = '\0';
+            readError = false;
+            snprintf(titleBuf, sizeof(titleBuf), "%.*s", (int)tokens[i + 1].end - (int)tokens[i + 1].start, fileContents + tokens[i + 1].start); // write contents of title attribute to buffer
 
             for (int pathIdx = 0; pathIdx < count; pathIdx++){
                 // check if we already have this attribute title in the spreadsheet
@@ -125,13 +127,19 @@ void parseUserPaths(jsmntok_t *tokens, const char *fileContents, int readTokens,
             worksheet_set_column(worksheet, column, column, 30, NULL);  // set the column width
             i++;    // skip one token (to get next key)
         }else if (jsoneq(fileContents, &tokens[i], "Path") == 0){   
-            strncpy(pathBuf, fileContents + tokens[i + 1].start, tokens[i + 1].end - tokens[i + 1].start + 1);
-            pathBuf[tokens[i + 1].end - tokens[i + 1].start] = '\0';
+            int pathBytes = snprintf(pathBuf, sizeof(pathBuf), "%.*s", (int)tokens[i + 1].end - (int)tokens[i + 1].start, fileContents + tokens[i + 1].start);
+            if (pathBytes < 0 || pathBytes >= sizeof(pathBuf)){
+                LOG(fptr, "User path is either truncated, or couldn't be written to!\n");
+                readError = true;
+            }
             i++;
-        }else if (jsoneq(fileContents, &tokens[i], "IpAddresses") == 0){
+        }else if (jsoneq(fileContents, &tokens[i], "IpAddresses") == 0 && !readError){
             for (int idx = 0; idx < tokens[i + 1].size; idx++){
-                strncpy(ipBuf, fileContents + tokens[i + 2 + idx].start, tokens[i + 2 + idx].end - tokens[i + 2 + idx].start + 1);
-                ipBuf[tokens[i + 2 + idx].end - tokens[i + 2 + idx].start] = '\0';
+                int addressBytes = snprintf(ipBuf, sizeof(ipBuf), "%.*s", (int)tokens[i + 2 + idx].end - (int)tokens[i + 2 + idx].start, fileContents + tokens[i + 2 + idx].start);
+                if (addressBytes < 0 || addressBytes >= sizeof(ipBuf)){
+                    LOG(fptr, "User ip address (%s) is either truncated, or couldn't be written to!\n", ipBuf);
+                    continue;
+                }
                 processUserDevice(ipBuf, tcpPort, pathBuf, ipMinHost, worksheet, column, fptr, ipRange); // process the user defined path
             }
             

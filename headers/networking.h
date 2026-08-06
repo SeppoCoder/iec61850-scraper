@@ -20,7 +20,7 @@ typedef struct {
     char IPPrefix[16];
     char hostMin[16];
     int minSuffix;
-    char hostMax[16];
+    char hostMax[24];
     int maxSuffix;
     int success;
 } IPRange;
