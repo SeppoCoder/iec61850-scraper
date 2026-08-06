@@ -128,7 +128,7 @@ void parseUserPaths(jsmntok_t *tokens, const char *fileContents, int readTokens,
             strncpy(pathBuf, fileContents + tokens[i + 1].start, tokens[i + 1].end - tokens[i + 1].start + 1);
             pathBuf[tokens[i + 1].end - tokens[i + 1].start] = '\0';
             i++;
-        }else if (jsoneq(fileContents, &tokens[i], "IpAddress") == 0){
+        }else if (jsoneq(fileContents, &tokens[i], "IpAddresses") == 0){
             for (int idx = 0; idx < tokens[i + 1].size; idx++){
                 strncpy(ipBuf, fileContents + tokens[i + 2 + idx].start, tokens[i + 2 + idx].end - tokens[i + 2 + idx].start + 1);
                 ipBuf[tokens[i + 2 + idx].end - tokens[i + 2 + idx].start] = '\0';

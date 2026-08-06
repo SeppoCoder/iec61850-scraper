@@ -6,7 +6,6 @@
 *.ko
 *.obj
 *.elf
-*.xlsx
 
 # Linker output
 *.ilk
@@ -42,7 +41,6 @@
 *.su
 *.idb
 *.pdb
-*.log
 
 # Kernel Module Compile Results
 *.mod*
@@ -55,3 +53,9 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+.vscode/
+includes/
+*.log
+*.xlsx
+libs/
