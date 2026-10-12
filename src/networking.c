@@ -30,7 +30,7 @@ NetworkInfo getInfoFromNetwork(const wchar_t *friendlyName, FILE *fptr){
     int hostnameSuccess = gethostname(hostnameBuf, sizeof(hostnameBuf));
     if (hostnameSuccess != 0){
         LOG(fptr, "Couldn't retrieve computer name.\n");
-        snprintf(hostnameBuf, sizeof(hostnameBuf), "%s", "N/A");
+        snprintf(hostnameBuf, sizeof(hostnameBuf), "%s", "Unknown");
     }
     snprintf(info.computerName, sizeof(info.computerName), "%s", hostnameBuf);
 
@@ -44,7 +44,7 @@ NetworkInfo getInfoFromNetwork(const wchar_t *friendlyName, FILE *fptr){
     if (GetAdaptersAddresses(family, flags, NULL, pAddresses, &outBufLen) == ERROR_BUFFER_OVERFLOW) {
         pAddresses = (PIP_ADAPTER_ADDRESSES)malloc(outBufLen);
         if (pAddresses == NULL) {
-            LOG(fptr, "Couldn't allocate memory for network network buffer.\n");
+            LOG(fptr, "Couldn't allocate memory for network buffer.\n");
             WSACleanup();
             return info;
         }
